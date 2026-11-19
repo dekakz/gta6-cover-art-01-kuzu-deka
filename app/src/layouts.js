@@ -1,19 +1,48 @@
-// Nine multi-panel layouts for Solmar Bay Cover Studio.
+// Ten multi-panel layouts for Solmar Bay Cover Studio (v2: key-art first).
 // Every layout is a pure function of the photo area (the canvas above the
-// title band) and returns panels as fractions of that area, plus the title
-// band itself as a fraction of the whole canvas. A panel may carry `slant`
-// (a diagonal cut, in fractions of its own width) for the tilt layout, or
-// `poly` points for a fully custom shape. drawCover in cover.js clips to
-// these shapes, so a layout never has to know how to paint.
+// thin bottom strip) and returns panels as fractions of that area. A panel
+// may carry `slant` (a diagonal cut, in fractions of its own width) for the
+// tilt layout. drawCover in cover.js clips to these shapes, so a layout
+// never has to know how to paint. The giant title overlaps the photos in
+// a virtual title zone (see titleZoneRect); there is no flat title band
+// any more — the photos run y 0 → 0.93 and only a thin strip sits below.
 
-/** The title band: y and height as fractions of the canvas height. */
-export function titleBandRect() {
-  return { x: 0, y: 0.78, w: 1, h: 0.22 };
+/** The thin bottom strip: y and height as fractions of the canvas height. */
+export function bottomStripRect() {
+  return { x: 0, y: 0.93, w: 1, h: 0.07 };
 }
 
-/** Photo area: everything above the title band, as fractions of the canvas. */
+/** Back-compat alias: v1 called the title band; v2's strip is the only
+ * solid band left on the cover. */
+export function titleBandRect() {
+  return bottomStripRect();
+}
+
+/** Photo area: everything above the bottom strip, as fractions of the canvas. */
 export function photoAreaRect() {
-  return { x: 0, y: 0, w: 1, h: 0.78 };
+  return { x: 0, y: 0, w: 1, h: 0.93 };
+}
+
+/** Title zone: the virtual band the giant title, quote and tagline live in,
+ * overlapping the photo seam. Fractions of the whole canvas. */
+export function titleZoneRect() {
+  return { x: 0, y: 0.52, w: 1, h: 0.3 };
+}
+
+/** Key Art (v2 default): hero left, two small panels top-right, a wide
+ * panel mid-right, and two panels along the foot — the 6-panel collage
+ * the winning covers use, built so the title can straddle the seam.
+ * Heights are fractions of the photo area (0.93 of the canvas), so the
+ * rows are 2/3 + 1/3 of the area — the panels fill it edge to edge. */
+export function layoutKeyArt() {
+  return [
+    { x: 0, y: 0, w: 0.48, h: 2 / 3 },
+    { x: 0.48, y: 0, w: 0.26, h: 1 / 3 },
+    { x: 0.74, y: 0, w: 0.26, h: 1 / 3 },
+    { x: 0.48, y: 1 / 3, w: 0.52, h: 1 / 3 },
+    { x: 0, y: 2 / 3, w: 0.48, h: 1 / 3 },
+    { x: 0.48, y: 2 / 3, w: 0.52, h: 1 / 3 },
+  ];
 }
 
 /** Hero-5: one big hero panel left, four small panels in a 2x2 grid right. */
@@ -100,6 +129,7 @@ export function layoutSkylineBand() {
 
 /** Registry: id -> { name, blurb, fn }. The editor builds its swatches from this. */
 export const LAYOUTS = {
+  'key-art': { name: 'Key Art', blurb: '6-panel collage, title over seam', fn: layoutKeyArt },
   'hero-5': { name: 'Hero 5', blurb: '1 big hero + 4 small', fn: layoutHeroFive },
   'grid-9': { name: 'Grid 9', blurb: '3 x 3 photo grid', fn: layoutGridNine },
   'split-4': { name: 'Split 4', blurb: 'Four equal quadrants', fn: layoutSplitFour },
@@ -113,8 +143,8 @@ export const LAYOUTS = {
 
 export const LAYOUT_IDS = Object.keys(LAYOUTS);
 
-/** Returns the panel list for a layout id, falling back to Hero 5. */
+/** Returns the panel list for a layout id, falling back to Key Art. */
 export function panelsForLayout(layoutId) {
-  const entry = LAYOUTS[layoutId] || LAYOUTS['hero-5'];
+  const entry = LAYOUTS[layoutId] || LAYOUTS['key-art'];
   return entry.fn();
 }

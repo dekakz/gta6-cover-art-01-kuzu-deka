@@ -1,7 +1,9 @@
-// Export for Solmar Bay Cover Studio: renders the cover at the three
+// Export for Solmar Bay Cover Studio (v2): renders the cover at the three
 // common post sizes and downloads them as PNGs, one click for all three
 // or one button per size. Rendering reuses drawCover on an offscreen
-// canvas, so an export is exactly what the live preview shows.
+// canvas, so an export is exactly what the live preview shows. Exports
+// wait for the bundled fonts first, so the PNG lettering never falls back
+// to a system font.
 
 import { drawCover } from './cover.js';
 
@@ -13,7 +15,15 @@ export const EXPORT_SIZES = [
 ];
 
 /** Renders the cover at `size` and resolves to a PNG Blob. */
-export function renderCoverBlob(state, size) {
+export async function renderCoverBlob(state, size) {
+  // Wait briefly for the bundled fonts so an export never falls back to a
+  // system font mid-render; the cover is deterministic either way.
+  try {
+    await Promise.race([
+      document.fonts.ready,
+      new Promise((r) => setTimeout(r, 1200)),
+    ]);
+  } catch { /* fonts are best-effort */ }
   const canvas = document.createElement('canvas');
   canvas.width = size.w;
   canvas.height = size.h;

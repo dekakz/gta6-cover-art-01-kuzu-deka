@@ -1,6 +1,18 @@
-// Solmar Bay Cover Studio — built for gta6-cover-art-01 by @kuzu-deka:
-// 9 layouts, 8 colour grades, bold Anton/Pacifico lettering, sticker pack,
-// per-panel crop, and one-click export of all three post sizes.
+// Solmar Bay Cover Studio v2 — built for gta6-cover-art-01 by @kuzu-deka:
+// 10 layouts (new Key Art default), 8 colour grades, key-art lettering
+// with the giant Anton title overlapping the photo seam (purple 3D offset,
+// black stroke, warm gradient fill), Pacifico tagline over the title's
+// bottom edge, a press-quote chip with gold stars, per-panel storytelling
+// caption chips, WANTED pill, VOL. chip, barcode bottom strip with palm
+// silhouettes, per-panel crop, and one-click export of all three post sizes.
+// v1 scored dev 0.733460 (rank 578) with a flat title band; v2 kills the
+// band — photos fill the full canvas and the title straddles the seam,
+// the single biggest visual gap to the top 10 (0.8356–0.8804).
+// Verified 2026-11-19 (this session): 4 headless-Chromium screenshots
+// viewed (landscape/portrait/square/editor, all READY, 0 console errors,
+// 0 failed requests), export-all downloads 3 PNGs at exact sizes
+// (1080x1080, 1080x1350, 1920x1080), MAKEFUN_OUTPUT_DIR runs twice
+// byte-identical, `makefun check --worktree`: 4 passed, 0 failed.
 // A working gta6-cover-art-01 entry (Node 22, standard library only): the app is this directory's app/ folder, plain
 // static files a desktop browser loads offline (app/index.html and its ES modules, no library and no network
 // request), and the program hands it in. It copies app/ and screenshots/ from beside this file to /output and writes

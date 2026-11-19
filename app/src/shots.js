@@ -1,7 +1,7 @@
-// Fixed scenes for screenshots: `?shot=cover` shows one exported cover
-// alone, `?shot=editor` shows the editor with photos loaded. Query knobs:
-// layout, grade, photo (comma list of sample ids), caption, tagline,
-// location, bar, preset, size (square|portrait|landscape).
+// Fixed scenes for screenshots (v2): `?shot=cover` shows one exported
+// cover alone, `?shot=editor` shows the editor with photos loaded. Query
+// knobs: layout, grade, photo (comma list of sample ids), caption,
+// tagline, location, bar, preset, size (square|portrait|landscape).
 // window.__shotReady is set once the cover is painted.
 import { SAMPLE_PHOTOS } from './editor.js';
 
@@ -18,14 +18,17 @@ export async function runShot(shot, query, editor) {
   if (query.get('tagline')) state.tagline = query.get('tagline');
   if (query.get('location')) state.location = query.get('location');
   if (query.get('bar')) state.barText = query.get('bar');
+  // A layout override after a preset changes the panel count, so re-sync
+  // assignments, crops and captions before the photos are dealt.
+  editor.syncPanels();
 
   const size = query.get('size') || (shot === 'cover' ? 'landscape' : 'landscape');
   editor.setPreviewSize(size);
 
-  const photoIds = (query.get('photo') || 'street,boulevard,neon,marina,lifeguard,pier')
+  const photoIds = (query.get('photo') || 'hero-convertible,man-face,sports-car,gas-station,motorcycle,aerial-coast')
     .split(',').map((s) => s.trim()).filter(Boolean);
   const known = photoIds.filter((id) => SAMPLE_PHOTOS.some((s) => s.id === id));
-  await editor.loadSamples(known.length ? known : ['street', 'boulevard', 'neon', 'marina']);
+  await editor.loadSamples(known.length ? known : ['hero-convertible', 'man-face', 'sports-car', 'gas-station', 'motorcycle', 'aerial-coast']);
 
   // Hide the editor chrome for a pure cover shot, keep it for editor shots.
   if (shot === 'cover') state.selectedPanel = null;

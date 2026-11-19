@@ -1,10 +1,11 @@
-// Eight colour grades for Solmar Bay Cover Studio.
+// Eight colour grades for Solmar Bay Cover Studio (v2).
 // A grade is data, not magic: warm/cool tint gradients painted over the
-// photo area, a band gradient for the title strip, a vignette strength and
-// a grain amount. applyGrade paints them onto a finished cover canvas;
-// gradeBandGradient gives the title band its own sunset/neon sky. Every
-// grade is deterministic (the grain uses a seeded pattern), so the same
-// cover exports byte-identical PNGs every time.
+// photo area, a vignette strength and a grain amount, plus `band` (kept
+// for the v1 title-band gradient) and `strip` — the thin bottom strip's
+// own gradient in v2, since the flat title band is gone. applyGrade paints
+// them onto a finished cover canvas. Every grade is deterministic (the
+// grain uses a seeded pattern), so the same cover exports byte-identical
+// PNGs every time.
 
 export const GRADES = {
   sunset: {
@@ -16,6 +17,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(214, 40, 120, 0.28)' },
     ],
     band: ['#ff9e2c', '#ff5e62', '#c026d3'],
+    strip: ['#1a051f', '#4a0e4e', '#ff2ea6'],
     vignette: 0.32,
     grain: 0.05,
     halftone: false,
@@ -29,6 +31,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(90, 20, 160, 0.30)' },
     ],
     band: ['#12002e', '#7b2ff7', '#ff2ea6'],
+    strip: ['#05010f', '#2a0a5e', '#ff2ea6'],
     vignette: 0.4,
     grain: 0.06,
     halftone: false,
@@ -42,6 +45,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(160, 30, 90, 0.26)' },
     ],
     band: ['#ffb347', '#ff6b6b', '#8e2a5c'],
+    strip: ['#20060f', '#5c1030', '#ff6b6b'],
     vignette: 0.3,
     grain: 0.04,
     halftone: false,
@@ -55,6 +59,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(20, 10, 60, 0.34)' },
     ],
     band: ['#f97316', '#7c3aed', '#1e1b4b'],
+    strip: ['#0d061f', '#2e1a5e', '#7c5cff'],
     vignette: 0.38,
     grain: 0.05,
     halftone: false,
@@ -67,6 +72,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(4, 8, 40, 0.42)' },
     ],
     band: ['#0b1026', '#1e3a8a', '#0ea5e9'],
+    strip: ['#020617', '#0f2a5e', '#0ea5e9'],
     vignette: 0.45,
     grain: 0.07,
     halftone: false,
@@ -80,6 +86,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(180, 90, 20, 0.20)' },
     ],
     band: ['#fde68a', '#f59e0b', '#b45309'],
+    strip: ['#1f0d02', '#5e2f08', '#f59e0b'],
     vignette: 0.26,
     grain: 0.03,
     halftone: false,
@@ -92,6 +99,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(0, 0, 0, 0.22)' },
     ],
     band: ['#facc15', '#f97316', '#111111'],
+    strip: ['#0a0a0a', '#3d2c05', '#facc15'],
     vignette: 0.3,
     grain: 0.02,
     halftone: true,
@@ -104,6 +112,7 @@ export const GRADES = {
       { stop: 1, color: 'rgba(0, 0, 0, 0.48)' },
     ],
     band: ['#525252', '#171717', '#000000'],
+    strip: ['#000000', '#1f1f1f', '#525252'],
     vignette: 0.5,
     grain: 0.09,
     halftone: false,
@@ -173,5 +182,16 @@ export function gradeBandGradient(ctx, x, y, w, h, gradeId) {
   g.addColorStop(0, grade.band[0]);
   g.addColorStop(0.55, grade.band[1]);
   g.addColorStop(1, grade.band[2]);
+  return g;
+}
+
+/** Horizontal gradient for the thin bottom strip of a grade (v2). */
+export function gradeStripGradient(ctx, x, y, w, h, gradeId) {
+  const grade = gradeFor(gradeId);
+  const stops = grade.strip || grade.band;
+  const g = ctx.createLinearGradient(x, y, x + w, y);
+  g.addColorStop(0, stops[0]);
+  g.addColorStop(0.55, stops[1]);
+  g.addColorStop(1, stops[2]);
   return g;
 }

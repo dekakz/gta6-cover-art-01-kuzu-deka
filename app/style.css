@@ -34,6 +34,8 @@ button.primary:disabled { opacity: 0.6; cursor: wait; }
 .swatch.preset { grid-column: span 1; }
 .single-exports { display: flex; gap: 8px; }
 .single-exports button { flex: 1; font-size: 13px; }
+.caption-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.caption-grid label { min-width: 0; }
 #status { margin: 0; color: #ffd23f; font-weight: 600; min-height: 1.4em; }
 .preview { flex: 1; min-width: 0; position: sticky; top: 20px; }
 .preview canvas { width: 100%; height: auto; display: block; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55); border-radius: 4px; cursor: crosshair; touch-action: none; background: #fff; }

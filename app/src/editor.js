@@ -1,15 +1,23 @@
-// Editor for Solmar Bay Cover Studio: the state, the controls, and the
-// live preview. One photo in, three steps out: pick a layout and a grade,
-// write the caption, export all three sizes. Every control redraws the
-// same canvas drawCover paints for export, so the preview never lies.
+// Editor for Solmar Bay Cover Studio (v2, key art): the state, the
+// controls, and the live preview. One photo in, three steps out: pick a
+// layout and a grade, write the caption, export all three sizes. Every
+// control redraws the same canvas drawCover paints for export, so the
+// preview never lies.
 import { drawCover } from './cover.js';
 import { LAYOUTS, LAYOUT_IDS, panelsForLayout } from './layouts.js';
 import { GRADES, GRADE_IDS } from './grades.js';
 import { EXPORT_SIZES, exportAllSizes, exportOneSize } from './export.js';
 import { defaultAssignments, defaultCrop, loadImage, loadImageFile } from './photos.js';
 
-/** The six bundled sample photos (original AI-made images, free to use). */
+/** The twelve bundled sample photos (original AI-made images, free to use):
+ * six new key-art photos first, then the six v1 photos. */
 export const SAMPLE_PHOTOS = [
+  { id: 'hero-convertible', label: 'Convertible hero', file: 'samples/hero-convertible.jpg' },
+  { id: 'man-face', label: 'Neon face', file: 'samples/man-face.jpg' },
+  { id: 'sports-car', label: 'Coast road car', file: 'samples/sports-car.jpg' },
+  { id: 'gas-station', label: 'Neon gas station', file: 'samples/gas-station.jpg' },
+  { id: 'motorcycle', label: 'Sunset rider', file: 'samples/motorcycle.jpg' },
+  { id: 'aerial-coast', label: 'Aerial coast', file: 'samples/aerial-coast.jpg' },
   { id: 'street', label: 'Art-deco street', file: 'samples/street.jpg' },
   { id: 'boulevard', label: 'Boulevard queen', file: 'samples/boulevard.jpg' },
   { id: 'neon', label: 'Neon street', file: 'samples/neon.jpg' },
@@ -18,12 +26,28 @@ export const SAMPLE_PHOTOS = [
   { id: 'pier', label: 'Pier fisherman', file: 'samples/pier.jpg' },
 ];
 
-/** One-click poster presets: a layout + grade + caption that already works. */
+/** Default per-panel storytelling captions (place / time / flavor),
+ * written for the key-art panels and cycled for larger layouts. */
+export const DEFAULT_CAPTIONS = [
+  { place: 'PALM ROW', time: '6:40 PM', flavor: 'TOP DOWN, NO PLANS' },
+  { place: 'NEON ROW', time: '11:58 PM', flavor: 'OUT PAST CURFEW' },
+  { place: 'COAST ROAD 9', time: '7:15 PM', flavor: 'CHASING THE LIGHT' },
+  { place: 'PALM FUEL STOP', time: '1:20 AM', flavor: 'RAIN ON NEON' },
+  { place: 'DUSK RIDGE', time: '8:05 PM', flavor: 'ONE LAST RIDE' },
+  { place: 'CORAL SHORE', time: '5:50 PM', flavor: 'THE WHOLE COAST' },
+];
+
+export function defaultCaptions(count) {
+  return Array.from({ length: count }, (_, i) => ({ ...DEFAULT_CAPTIONS[i % DEFAULT_CAPTIONS.length] }));
+}
+
+/** One-click poster presets: a layout + grade + caption that already works.
+ * Key Art leads; every preset carries its own quote and panel captions. */
 export const PRESETS = [
-  { id: 'sunset-chase', name: 'Sunset Chase', layout: 'hero-5', grade: 'sunset', title: 'SUNSET CHASE', tagline: 'every street is a stage', location: 'SOLMAR BAY', barText: 'ONE CITY. EVERY LIGHT TELLS A STORY.' },
-  { id: 'neon-vice', name: 'Neon Vice', layout: 'grid-9', grade: 'neon-vice', title: 'NEON VICE', tagline: 'neon tides, golden streets', location: 'CORAL BAY', barText: 'ONE CITY. EVERY NIGHT HAS A PRICE.' },
-  { id: 'coral-heat', name: 'Coral Heat', layout: 'magazine', grade: 'coral-heat', title: 'CORAL HEAT', tagline: 'golden hour, hot pursuit', location: 'SOLMAR BAY', barText: 'ONE CITY. EVERY SECRET HAS A VIEW.' },
-  { id: 'halftone-noir', name: 'Halftone Noir', layout: 'tilt', grade: 'halftone', title: 'PALM MERIDIAN', tagline: 'neon harbor nights', location: 'SOLMAR BAY', barText: 'ONE CITY. EVERY SHADOW KEEPS A SECRET.' },
+  { id: 'sunset-chase', name: 'Sunset Chase', layout: 'key-art', grade: 'sunset', title: 'SUNSET CHASE', tagline: 'every street is a stage', location: 'SOLMAR BAY', barText: 'ONE CITY. EVERY LIGHT TELLS A STORY.', quote: { stars: 5, text: 'GOLDEN HOURS, DARKER DEALS', source: 'THE BAY LEDGER' } },
+  { id: 'neon-vice', name: 'Neon Vice', layout: 'key-art', grade: 'neon-vice', title: 'NEON VICE', tagline: 'the night never clocks out', location: 'CORAL BAY', barText: 'ONE CITY. EVERY NIGHT HAS A PRICE.', quote: { stars: 5, text: 'MIDNIGHT RUNS ON NEON', source: 'THE BAY LEDGER' } },
+  { id: 'coral-heat', name: 'Coral Heat', layout: 'key-art', grade: 'coral-heat', title: 'CORAL HEAT', tagline: 'golden hour, hot pursuit', location: 'SOLMAR BAY', barText: 'ONE CITY. EVERY SECRET HAS A VIEW.', quote: { stars: 5, text: 'SALT AIR, HOT LEADS', source: 'SOLMAR GAZETTE' } },
+  { id: 'halftone-noir', name: 'Halftone Noir', layout: 'tilt', grade: 'halftone', title: 'PALM MERIDIAN', tagline: 'neon harbor nights', location: 'SOLMAR BAY', barText: 'ONE CITY. EVERY SHADOW KEEPS A SECRET.', quote: { stars: 4, text: 'EVERY SHADOW KEEPS A SECRET', source: 'SOLMAR GAZETTE' } },
 ];
 
 /** Fresh editor state. */
@@ -33,20 +57,22 @@ export function defaultState() {
     photoNames: [],
     assignments: [],
     crops: [],
-    layout: 'hero-5',
+    captions: defaultCaptions(6),
+    layout: 'key-art',
     grade: 'sunset',
     title: 'SUNSET CHASE',
     tagline: 'every street is a stage',
     location: 'SOLMAR BAY',
     barText: 'ONE CITY. EVERY LIGHT TELLS A STORY.',
-    stickers: { est: true, isNew: true, ribbon: true, ribbonText: 'SAME TROUBLE', collectors: true, stars: true, starRating: 4 },
+    quote: { stars: 5, text: 'GOLDEN HOURS, DARKER DEALS', source: 'THE BAY LEDGER' },
+    stickers: { est: true, isNew: false, ribbon: false, ribbonText: 'SAME TROUBLE', collectors: true, stars: true, starRating: 5, wanted: true, vol: 'VOL. 06' },
     photoMode: 'each',
     selectedPanel: 0,
     previewSize: 'landscape',
   };
 }
 
-/** Rebuilds assignments/crops after the layout or photo list changes. */
+/** Rebuilds assignments/crops/captions after the layout or photo list changes. */
 export function syncPanels(state) {
   const count = panelsForLayout(state.layout).length;
   const keptAssignments = state.assignments.slice(0, count);
@@ -56,6 +82,10 @@ export function syncPanels(state) {
   state.assignments = keptAssignments;
   while (state.crops.length < count) state.crops.push(defaultCrop());
   state.crops = state.crops.slice(0, count);
+  if (!state.captions) state.captions = [];
+  const keptCaptions = state.captions.slice(0, count);
+  while (keptCaptions.length < count) keptCaptions.push({ ...DEFAULT_CAPTIONS[keptCaptions.length % DEFAULT_CAPTIONS.length] });
+  state.captions = keptCaptions;
   state.selectedPanel = Math.min(state.selectedPanel, count - 1);
 }
 
@@ -68,6 +98,11 @@ export function applyPreset(state, presetId) {
   state.tagline = p.tagline;
   state.location = p.location;
   state.barText = p.barText;
+  if (p.quote) {
+    state.quote = { ...p.quote };
+    state.stickers.starRating = p.quote.stars ?? state.stickers.starRating;
+  }
+  state.captions = defaultCaptions(panelsForLayout(p.layout).length);
   syncPanels(state);
   return p;
 }
@@ -206,6 +241,11 @@ export function createEditor(canvas) {
     if (zoom) zoom.value = String(crop.zoom);
     if (panX) panX.value = String(crop.ox);
     if (panY) panY.value = String(crop.oy);
+    const cap = state.captions[state.selectedPanel] || { place: '', time: '', flavor: '' };
+    const set = (id, value) => { const el = $(id); if (el) el.value = value; };
+    set('caption-place', cap.place);
+    set('caption-time', cap.time);
+    set('caption-flavor', cap.flavor);
   }
 
   function bindControls() {
@@ -217,6 +257,10 @@ export function createEditor(canvas) {
     bindText('tagline', 'tagline');
     bindText('location', 'location');
     bindText('bar-text', 'barText');
+    const quoteText = $('quote-text');
+    if (quoteText) quoteText.addEventListener('input', () => { state.quote.text = quoteText.value; redraw(); });
+    const quoteSource = $('quote-source');
+    if (quoteSource) quoteSource.addEventListener('input', () => { state.quote.source = quoteSource.value; redraw(); });
 
     const photoInput = $('photo');
     if (photoInput) {
@@ -275,6 +319,19 @@ export function createEditor(canvas) {
     bindCrop('crop-zoom', 'zoom');
     bindCrop('crop-x', 'ox');
     bindCrop('crop-y', 'oy');
+    const bindCaption = (id, key) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        const cap = state.captions[state.selectedPanel] || { place: '', time: '', flavor: '' };
+        cap[key] = el.value;
+        state.captions[state.selectedPanel] = cap;
+        redraw();
+      });
+    };
+    bindCaption('caption-place', 'place');
+    bindCaption('caption-time', 'time');
+    bindCaption('caption-flavor', 'flavor');
 
     const presetBox = $('preset-swatches');
     if (presetBox) {
@@ -306,13 +363,22 @@ export function createEditor(canvas) {
     bindSticker('sticker-ribbon', 'ribbon');
     bindSticker('sticker-collectors', 'collectors');
     bindSticker('sticker-stars', 'stars');
+    bindSticker('sticker-wanted', 'wanted');
     const stars = $('star-rating');
     if (stars) {
-      stars.addEventListener('change', () => { state.stickers.starRating = Number(stars.value); redraw(); });
+      stars.addEventListener('change', () => {
+        state.stickers.starRating = Number(stars.value);
+        state.quote.stars = Number(stars.value);
+        redraw();
+      });
     }
     const ribbonText = $('ribbon-text');
     if (ribbonText) {
       ribbonText.addEventListener('input', () => { state.stickers.ribbonText = ribbonText.value; redraw(); });
+    }
+    const volText = $('vol-text');
+    if (volText) {
+      volText.addEventListener('input', () => { state.stickers.vol = volText.value; redraw(); });
     }
 
     const previewSel = $('preview-size');
@@ -393,6 +459,14 @@ export function createEditor(canvas) {
     set('tagline', state.tagline);
     set('location', state.location);
     set('bar-text', state.barText);
+    set('quote-text', state.quote.text);
+    set('quote-source', state.quote.source);
+    set('ribbon-text', state.stickers.ribbonText);
+    set('vol-text', state.stickers.vol);
+    const stars = $('star-rating');
+    if (stars) stars.value = String(state.stickers.starRating);
+    const wanted = $('sticker-wanted');
+    if (wanted) wanted.checked = !!state.stickers.wanted;
   }
 
   syncPanels(state);
@@ -406,6 +480,7 @@ export function createEditor(canvas) {
     redraw,
     loadSamples,
     setPreviewSize,
+    syncPanels: () => syncPanels(state),
     applyPreset: (id) => { applyPreset(state, id); syncInputs(); buildSwatches(); renderPanelPicker(); redraw(); },
     setStatus,
   };

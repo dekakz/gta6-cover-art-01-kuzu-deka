@@ -1,5 +1,8 @@
-// Solmar Bay Cover Studio: loads the bundled fonts, starts the editor,
-// and hands a `?shot=` query to shots.js for deterministic screenshots.
+// Solmar Bay Cover Studio (v2, key art): loads the bundled fonts, starts
+// the editor, and hands a `?shot=` query to shots.js for deterministic
+// screenshots. The default cover is the 6-panel Key Art layout with the
+// giant title overlapping the photo seam, per-panel caption chips, a press
+// quote, WANTED / VOL. stickers and a thin palm bottom strip.
 import { createEditor } from './editor.js';
 import { runShot } from './shots.js';
 
@@ -39,6 +42,8 @@ if (shot) {
   await runShot(shot, query, editor);
 } else {
   loadFonts().then(() => editor.redraw());
-  // Load the sample photos so the first paint already shows the studio.
-  editor.loadSamples(['street', 'boulevard', 'neon', 'marina', 'lifeguard', 'pier']);
+  // Load the sample photos so the first paint already shows the studio:
+  // the six new key-art photos fill the six Key Art panels first, then
+  // the six v1 photos are available for the other layouts.
+  editor.loadSamples(['hero-convertible', 'man-face', 'sports-car', 'gas-station', 'motorcycle', 'aerial-coast', 'street', 'boulevard', 'neon', 'marina', 'lifeguard', 'pier']);
 }

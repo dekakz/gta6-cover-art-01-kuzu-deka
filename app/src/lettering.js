@@ -1,9 +1,11 @@
-// Bold caption lettering for Solmar Bay Cover Studio.
-// The title is set in Anton (a condensed display face shipped under
-// app/fonts/), auto-fitted to the band width, filled with a warm gradient,
-// stroked in black and drop-shadowed — the poster-title look. The tagline
-// is Pacifico script, the location label and tagline bar are Oswald caps.
-// drawCoverLettering paints everything that sits in the title band.
+// Key-art lettering for Solmar Bay Cover Studio (v2).
+// The title lives in a virtual title zone overlapping the photo seam —
+// never in a flat band. It is set in Anton, auto-fitted to 0.94 of the
+// canvas width, painted first as a dark-purple offset copy (3D extrusion),
+// then with a thick black stroke and a warm white→gold→orange→pink
+// gradient fill. The Pacifico tagline overlaps the title's bottom edge,
+// the press quote (gold stars + quote + source) sits on a black chip just
+// above the title, and the location label floats above the quote.
 
 /** Largest Anton size (px) that fits `text` inside `maxWidth`. */
 export function fitTitleSize(ctx, text, maxWidth, startSize) {
@@ -16,7 +18,18 @@ export function fitTitleSize(ctx, text, maxWidth, startSize) {
   return size;
 }
 
-/** Gradient fill for the title: gold at the top, hot pink at the foot. */
+/** Largest Oswald size (px) that fits `text` inside `maxWidth`. */
+export function fitTextSize(ctx, text, maxWidth, startSize, weight = 600) {
+  let size = startSize;
+  ctx.font = `${weight} ${size}px Oswald, sans-serif`;
+  while (size > 9 && ctx.measureText(text).width > maxWidth) {
+    size -= 1;
+    ctx.font = `${weight} ${size}px Oswald, sans-serif`;
+  }
+  return size;
+}
+
+/** Gradient fill for the title: white-gold at the top, hot pink at the foot. */
 export function titleGradient(ctx, y, height) {
   const g = ctx.createLinearGradient(0, y, 0, y + height);
   g.addColorStop(0, '#fff7cc');
@@ -27,59 +40,108 @@ export function titleGradient(ctx, y, height) {
 }
 
 /**
- * Paints the title band: location label with stars, the big title,
- * the script tagline, and the tagline bar along the foot.
- * `band` is {x, y, w, h} in canvas pixels. `opts` carries the caption
- * strings, the star rating and whether the title gets halftone dots.
+ * Paints the key-art title zone: location label, press-quote chip, the
+ * giant title with its purple 3D offset, and the script tagline overlapping
+ * the title's bottom edge.
+ * `zone` is {x, y, w, h} in canvas pixels (titleZoneRect). `opts` carries
+ * title, tagline, location, quote {text, source}, stars (0-5) and halftone.
  */
-export function drawCoverLettering(ctx, band, opts) {
-  const { w, h, x, y } = band;
+export function drawCoverLettering(ctx, zone, opts) {
+  const { w, h, x, y } = zone;
   const cx = x + w / 2;
   const title = (opts.title || 'SOLMAR BAY').trim().toUpperCase();
   const location = (opts.location || '').trim().toUpperCase();
   const tagline = (opts.tagline || '').trim();
-  const barText = (opts.barText || '').trim().toUpperCase();
+  const quote = opts.quote || null;
+  const stars = Math.max(0, Math.min(5, opts.stars ?? 5));
 
   // Location label: small tracked-out caps with a star on each side.
   if (location) {
-    const ls = Math.max(14, h * 0.085);
+    const ls = Math.max(13, h * 0.062);
     ctx.font = `600 ${ls}px Oswald, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = '#fff8e7';
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = ls * 0.25;
-    const label = `★  ${location}  ★`;
-    ctx.fillText(label, cx, y + h * 0.13);
+    ctx.fillText(`★  ${location}  ★`, cx, y + h * 0.1);
     ctx.shadowBlur = 0;
   }
 
-  // Big title, auto-fitted, gradient fill, black outline, drop shadow.
+  // Press-quote chip: gold stars + quote + source on a black pill.
+  if (quote && quote.text) {
+    const qText = quote.text.trim().toUpperCase();
+    const src = (quote.source || '').trim().toUpperCase();
+    const starStr = '★'.repeat(stars) + '☆'.repeat(5 - stars);
+    let qs = Math.max(12, h * 0.056);
+    const full = `${starStr}  “${qText}”${src ? ` — ${src}` : ''}`;
+    qs = fitTextSize(ctx, full, w * 0.92, qs, 600);
+    ctx.font = `600 ${qs}px Oswald, sans-serif`;
+    const tw = ctx.measureText(full).width;
+    const chipH = qs * 1.9;
+    const chipW = tw + qs * 1.6;
+    const chipX = cx - chipW / 2;
+    const chipY = y + h * 0.14;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(chipX, chipY, chipW, chipH, chipH / 2);
+    ctx.fillStyle = 'rgba(6, 3, 10, 0.85)';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, qs * 0.06);
+    ctx.strokeStyle = 'rgba(255, 210, 63, 0.4)';
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Stars gold, quote cream, source gold — drawn as one measured line
+    // in three runs so the colours can differ without re-measuring.
+    const starW = ctx.measureText(`${starStr}  `).width;
+    const quoteW = ctx.measureText(`“${qText}”`).width;
+    let tx = cx - tw / 2;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillText(`${starStr}  `, tx, chipY + chipH / 2 + 1);
+    tx += starW;
+    ctx.fillStyle = '#fff8e7';
+    ctx.fillText(`“${qText}”`, tx, chipY + chipH / 2 + 1);
+    tx += quoteW;
+    if (src) {
+      ctx.fillStyle = '#ffd23f';
+      ctx.fillText(` — ${src}`, tx, chipY + chipH / 2 + 1);
+    }
+    ctx.restore();
+  }
+
+  // Giant title: purple 3D offset copy, then black stroke + gradient fill.
+  let titleTop = y + h * 0.34;
+  let titleSize = 0;
   if (title) {
-    const titleY = y + h * 0.22;
-    const titleH = h * 0.38;
-    const size = fitTitleSize(ctx, title, w * 0.94, titleH);
-    ctx.font = `${size}px Anton, 'Arial Narrow', sans-serif`;
+    titleTop = y + h * 0.34;
+    titleSize = fitTitleSize(ctx, title, w * 0.94, h * 0.52);
+    ctx.font = `${titleSize}px Anton, 'Arial Narrow', sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.lineJoin = 'round';
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = size * 0.08;
-    ctx.shadowOffsetY = size * 0.05;
+    const dx = titleSize * 0.045;
+    const dy = titleSize * 0.06;
+    ctx.fillStyle = '#4c1d95';
+    ctx.fillText(title, cx + dx, titleTop + dy);
+    ctx.fillStyle = '#2a0a4a';
+    ctx.fillText(title, cx + dx * 0.5, titleTop + dy * 0.5);
     ctx.strokeStyle = '#14060a';
-    ctx.lineWidth = Math.max(3, size * 0.09);
-    ctx.strokeText(title, cx, titleY);
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-    ctx.fillStyle = titleGradient(ctx, titleY, size);
-    ctx.fillText(title, cx, titleY);
-    // Optional halftone dots clipped to the title letters.
+    ctx.lineWidth = Math.max(3, titleSize * 0.1);
+    ctx.strokeText(title, cx, titleTop);
+    ctx.fillStyle = titleGradient(ctx, titleTop, titleSize);
+    ctx.fillText(title, cx, titleTop);
+    // Optional halftone dots, clipped to the title's own box.
     if (opts.halftone) {
       ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, titleTop, w, titleSize * 1.1);
+      ctx.clip();
       ctx.globalCompositeOperation = 'source-atop';
-      const gap = Math.max(6, size / 14);
-      ctx.fillStyle = 'rgba(0,0,0,0.28)';
-      for (let yy = titleY; yy < titleY + size; yy += gap) {
+      const gap = Math.max(6, titleSize / 14);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      for (let yy = titleTop; yy < titleTop + titleSize; yy += gap) {
         for (let xx = x; xx < x + w; xx += gap) {
           ctx.beginPath();
           ctx.arc(xx, yy, gap * 0.16, 0, Math.PI * 2);
@@ -90,35 +152,23 @@ export function drawCoverLettering(ctx, band, opts) {
     }
   }
 
-  // Script tagline under the title.
-  if (tagline) {
+  // Script tagline in hot pink, overlapping the title's bottom edge.
+  if (tagline && titleSize > 0) {
     const ts = Math.max(16, h * 0.15);
     ctx.font = `${ts}px Pacifico, cursive`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#ffe9f6';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = ts * 0.2;
-    ctx.fillText(tagline, cx, y + h * 0.74);
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(20, 4, 16, 0.85)';
+    ctx.lineWidth = Math.max(2, ts * 0.12);
+    const ty = titleTop + titleSize * 0.94;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = ts * 0.22;
+    ctx.shadowOffsetY = ts * 0.06;
+    ctx.strokeText(tagline, cx, ty);
+    ctx.fillStyle = '#ff2ea6';
+    ctx.fillText(tagline, cx, ty);
     ctx.shadowBlur = 0;
-  }
-
-  // Tagline bar: a dark strip along the foot with tracked-out caps.
-  if (barText) {
-    const barH = h * 0.16;
-    const barY = y + h - barH;
-    ctx.fillStyle = 'rgba(10, 4, 12, 0.72)';
-    ctx.fillRect(x, barY, w, barH);
-    const bs = Math.max(11, barH * 0.42);
-    ctx.font = `600 ${bs}px Oswald, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff3d6';
-    let spaced = barText.split('').join('\u2009');
-    while (ctx.measureText(spaced).width > w * 0.92 && bs > 8) {
-      spaced = barText;
-      break;
-    }
-    ctx.fillText(spaced, cx, barY + barH / 2 + 1);
+    ctx.shadowOffsetY = 0;
   }
 }

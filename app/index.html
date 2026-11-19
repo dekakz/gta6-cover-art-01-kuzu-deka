@@ -10,7 +10,7 @@
 <main class="app">
   <section class="controls" aria-label="Cover editor controls">
     <h1>Solmar Bay Cover Studio</h1>
-    <p class="tagline">Your photos, a sunset city, one poster. Three steps: photos → layout &amp; grade → export all three sizes.</p>
+    <p class="tagline">Your photos, a sunset city, one poster. Three steps: photos → layout &amp; grade → export all three sizes. v2 key art: the giant title overlaps the photos, every panel tells its own story.</p>
 
     <section class="group" id="drop-zone">
       <h2>1 · Photos</h2>
@@ -18,7 +18,7 @@
         <input id="photo" type="file" accept="image/*" multiple>
       </label>
       <p class="hint">Or drop image files anywhere on this panel. Click a thumbnail to put it in the selected panel.</p>
-      <button id="load-samples" type="button">Load the 6 sample photos</button>
+      <button id="load-samples" type="button">Load the 12 sample photos</button>
       <div id="photo-list" class="photo-list" aria-label="Loaded photos"></div>
       <div class="mode-row" role="group" aria-label="Photo mode">
         <button id="mode-one" type="button">One photo across all panels</button>
@@ -27,7 +27,7 @@
     </section>
 
     <section class="group">
-      <h2>2 · Layout — 9 ways to arrange the panels</h2>
+      <h2>2 · Layout — 10 ways to arrange the panels</h2>
       <div id="layout-swatches" class="swatches"></div>
     </section>
 
@@ -41,6 +41,8 @@
       <label>Title <input id="title" type="text" maxlength="32" value="SUNSET CHASE"></label>
       <label>Script tagline <input id="tagline" type="text" maxlength="48" value="every street is a stage"></label>
       <label>Location label <input id="location" type="text" maxlength="24" value="SOLMAR BAY"></label>
+      <label>Press quote <input id="quote-text" type="text" maxlength="56" value="GOLDEN HOURS, DARKER DEALS"></label>
+      <label>Quote source <input id="quote-source" type="text" maxlength="24" value="THE BAY LEDGER"></label>
       <label>Tagline bar <input id="bar-text" type="text" maxlength="56" value="ONE CITY. EVERY LIGHT TELLS A STORY."></label>
     </section>
 
@@ -51,18 +53,25 @@
       <label>Zoom <input id="crop-zoom" type="range" min="1" max="2.5" step="0.05" value="1"></label>
       <label>Pan left–right <input id="crop-x" type="range" min="-1" max="1" step="0.05" value="0"></label>
       <label>Pan up–down <input id="crop-y" type="range" min="-1" max="1" step="0.05" value="0"></label>
+      <div class="caption-grid">
+        <label>Caption place <input id="caption-place" type="text" maxlength="20" value="PALM ROW"></label>
+        <label>Caption time <input id="caption-time" type="text" maxlength="12" value="6:40 PM"></label>
+      </div>
+      <label>Caption flavor <input id="caption-flavor" type="text" maxlength="28" value="TOP DOWN, NO PLANS"></label>
       <p class="hint">Tip: click a panel on the cover, then drag it to pan the photo inside.</p>
     </section>
 
     <section class="group">
       <h2>6 · Stickers &amp; badges</h2>
       <label class="check"><input id="sticker-est" type="checkbox" checked> EST. 2026 starburst</label>
-      <label class="check"><input id="sticker-new" type="checkbox" checked> NEW badge</label>
-      <label class="check"><input id="sticker-ribbon" type="checkbox" checked> Diagonal ribbon</label>
+      <label class="check"><input id="sticker-new" type="checkbox"> NEW badge</label>
+      <label class="check"><input id="sticker-ribbon" type="checkbox"> Diagonal ribbon</label>
       <label>Ribbon text <input id="ribbon-text" type="text" maxlength="20" value="SAME TROUBLE"></label>
       <label class="check"><input id="sticker-collectors" type="checkbox" checked> COLLECTORS EDITION pill</label>
+      <label class="check"><input id="sticker-wanted" type="checkbox" checked> WANTED pill</label>
+      <label>VOL. chip text <input id="vol-text" type="text" maxlength="12" value="VOL. 06"></label>
       <label class="check"><input id="sticker-stars" type="checkbox" checked> Star rating</label>
-      <label>Stars <select id="star-rating"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option></select></label>
+      <label>Stars <select id="star-rating"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option></select></label>
     </section>
 
     <section class="group">
