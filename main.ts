@@ -1,3 +1,6 @@
+// Solmar Bay Cover Studio — built for gta6-cover-art-01 by @kuzu-deka:
+// 9 layouts, 8 colour grades, bold Anton/Pacifico lettering, sticker pack,
+// per-panel crop, and one-click export of all three post sizes.
 // A working gta6-cover-art-01 entry (Node 22, standard library only): the app is this directory's app/ folder, plain
 // static files a desktop browser loads offline (app/index.html and its ES modules, no library and no network
 // request), and the program hands it in. It copies app/ and screenshots/ from beside this file to /output and writes
