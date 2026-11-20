@@ -3,105 +3,67 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Solmar Bay Cover Studio — GTA-style cover art maker</title>
-<link rel="stylesheet" href="style.css">
+<title>Solmar Bay — Cover Studio</title>
+<link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="brand-mark">SB</span>
-    <span class="brand-name">SOLMAR BAY <em>Cover Studio</em></span></div>
-  <div class="topbar-note">Your photos &rarr; key art &rarr; PNG in 3 sizes. Works fully offline.</div>
+  <div class="brand"><span class="brand-sun" aria-hidden="true"></span> SOLMAR BAY <em>Cover Studio</em></div>
+  <p class="topbar-note">Your photos stay on your machine. No Rockstar assets. Fonts under the SIL Open Font License.</p>
 </header>
-
-<main class="studio">
-  <section class="preview-col">
-    <div class="canvas-wrap">
-      <canvas id="cover" width="1920" height="1080" aria-label="Cover preview"></canvas>
-      <div class="drop-hint" id="dropHint">Drop your photos here</div>
-    </div>
-    <div class="size-row" id="sizeRow" role="group" aria-label="Cover size">
-      <button type="button" data-size="1920x1080" class="size-btn active">1920 &times; 1080</button>
-      <button type="button" data-size="1080x1080" class="size-btn">1080 &times; 1080</button>
-      <button type="button" data-size="1080x1350" class="size-btn">1080 &times; 1350</button>
-    </div>
-    <div class="export-row">
-      <button type="button" id="exportAll" class="btn primary">Export all 3 sizes</button>
-      <button type="button" id="exportOne" class="btn">Export this size</button>
-      <span class="export-note" id="exportNote"></span>
-    </div>
-    <p class="fineprint">Photos stay on your machine. Nothing is uploaded.</p>
-  </section>
-
+<main class="app">
   <aside class="controls" id="controls">
-    <section class="panel" id="sec-presets">
-      <h2>1 &middot; Presets</h2>
-      <div class="preset-grid" id="presetGrid"></div>
-      <div class="row">
-        <button type="button" id="loadSamples" class="btn">Load the 12 sample photos</button>
-        <label class="file-btn">Add your photos
-          <input type="file" id="uploadInput" accept="image/*" multiple hidden>
-        </label>
-      </div>
-      <label class="check"><input type="checkbox" id="onePhoto"> One photo fills every panel</label>
+    <section>
+      <h2>1 · Preset</h2>
+      <div class="preset-row" id="presets"></div>
+      <p class="section-note">One click loads a finished cover. Edit anything after.</p>
     </section>
-
-    <section class="panel" id="sec-layout">
-      <h2>2 &middot; Layout &amp; grade</h2>
-      <div class="layout-grid" id="layoutGrid"></div>
-      <div class="grade-row" id="gradeRow"></div>
+    <section>
+      <h2>2 · Layout</h2>
+      <div class="layout-grid" id="layouts"></div>
     </section>
-
-    <section class="panel" id="sec-lettering">
-      <h2>3 &middot; Lettering</h2>
-      <label>Title <input type="text" id="inTitle" maxlength="24" value="SUNSET CHASE"></label>
-      <label>Tagline <input type="text" id="inTagline" maxlength="48" value="every street is a stage"></label>
-      <label>Location <input type="text" id="inLocation" maxlength="24" value="SOLMAR BAY"></label>
-      <div class="row2">
-        <label>Quote <input type="text" id="inQuote" maxlength="48" value="GOLDEN HOURS, DARKER DEALS"></label>
-        <label>Quote source <input type="text" id="inQuoteSource" maxlength="24" value="THE SOLMAR GAZETTE"></label>
-      </div>
-      <div class="row2">
-        <label>Stars <input type="number" id="inStars" min="1" max="5" step="1" value="5"></label>
-        <label>Title style
-          <select id="inTitleStyle">
-            <option value="stripes">Sunset stripes</option>
-            <option value="gradient">Smooth gradient</option>
-          </select>
-        </label>
-      </div>
+    <section>
+      <h2>3 · Grade</h2>
+      <div class="grade-row" id="grades"></div>
     </section>
-
-    <section class="panel" id="sec-panels">
-      <h2>4 &middot; Panels <span class="hint">photo, role &amp; story per panel</span></h2>
-      <div id="panelList"></div>
+    <section>
+      <h2>4 · Words</h2>
+      <label>Title <input id="title" type="text" maxlength="24" autocomplete="off"></label>
+      <div class="seg" id="title-style">
+        <button type="button" data-style="stripes">Striped title</button>
+        <button type="button" data-style="gradient">Gradient title</button>
+      </div>
+      <label>Tagline <input id="tagline" type="text" maxlength="60" autocomplete="off"></label>
+      <label>Press quote <input id="quote" type="text" maxlength="120" autocomplete="off"></label>
+      <label>Quote source <input id="quote-source" type="text" maxlength="30" autocomplete="off"></label>
     </section>
-
-    <section class="panel" id="sec-stickers">
-      <h2>5 &middot; Stickers &amp; strip</h2>
-      <div class="row2">
-        <label class="check"><input type="checkbox" id="inWanted" checked> WANTED pill</label>
-        <label class="check"><input type="checkbox" id="inSeal" checked> Gold seal</label>
-      </div>
-      <div class="row2">
-        <label class="check"><input type="checkbox" id="inCollectors" checked> Collector&rsquo;s edition</label>
-        <label class="check"><input type="checkbox" id="inRibbon"> Diagonal ribbon</label>
-      </div>
-      <label>Volume chip <input type="text" id="inVol" maxlength="12" value="VOL. 06"></label>
-      <label>Bottom bar text <input type="text" id="inBarText" maxlength="64" value="ONE COAST &middot; NO RULES &middot; COMING SOON"></label>
-      <label>Credit line <input type="text" id="inCredit" maxlength="90" value="A SOLMAR BAY PICTURE &middot; STARRING YOU &middot; SHOT ON YOUR OWN CAMERA"></label>
+    <section>
+      <h2>5 · Size</h2>
+      <div class="seg" id="sizes"></div>
+    </section>
+    <section>
+      <h2>6 · Panel <span id="panel-name"></span></h2>
+      <div class="photo-grid" id="photo-grid"></div>
+      <label class="upload">+ Upload your photo <input id="upload" type="file" accept="image/*"></label>
+      <label>Role tag <input id="role" type="text" maxlength="20" autocomplete="off"></label>
+      <label>Caption <input id="caption" type="text" maxlength="80" autocomplete="off"></label>
+      <label>Zoom <input id="zoom" type="range" min="1" max="2.5" step="0.05" value="1"></label>
+      <label>Pan left–right <input id="panx" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+      <label>Pan up–down <input id="pany" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+      <label class="check"><input id="one-photo" type="checkbox"> One photo fills every panel</label>
+      <p class="section-note">Click the cover to pick a panel. Drag a photo file onto the cover to use it.</p>
+    </section>
+    <section class="export-box">
+      <button id="export-one" class="primary" type="button">Export PNG</button>
+      <button id="export-all" class="primary gold" type="button">Export all 3 sizes</button>
+      <p id="status" role="status">Ready — pick a preset, then export.</p>
     </section>
   </aside>
+  <section class="stage">
+    <div class="canvas-wrap"><canvas id="preview" width="1080" height="1350"></canvas></div>
+    <p class="hint">Click a panel to edit it. Drag a photo file onto the cover to use it.</p>
+  </section>
 </main>
-
-<script src="src/layouts.js"></script>
-<script src="src/grades.js"></script>
-<script src="src/photos.js"></script>
-<script src="src/lettering.js"></script>
-<script src="src/stickers.js"></script>
-<script src="src/cover.js"></script>
-<script src="src/export.js"></script>
-<script src="src/editor.js"></script>
-<script src="src/shots.js"></script>
-<script src="src/main.js"></script>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -1,75 +1,77 @@
-// Sample photos and the cover-fit crop that draws them into panels.
-// All twelve samples are original photos made with an image model for this
-// studio: fictional people, no real person, no game artwork. A photo is
-// drawn "cover" style — scaled to fill its panel, then panned — and the pan
-// can never expose an edge, because the drawn image always covers the rect.
-'use strict';
+// photos.js — the twelve sample photos and the cover-fit photo drawer.
+//
+// Every sample was made with an image model for this studio: no real
+// person, no game artwork. px/py is the photo's focal point (0..1), so a
+// tall panel frames the face instead of the middle of the frame.
 
-// One entry per sample: the file, the role tag and the story caption the
-// panel shows by default. The strings are the studio's own.
-const SAMPLES = [
-  { src: 'samples/hero-driver.jpg', role: 'THE DRIVER', place: 'SOLMAR STRIP', time: '6:40 PM', flavor: 'TOP DOWN, NO PLANS' },
-  { src: 'samples/duo-convertible.jpg', role: 'THE GETAWAY', place: 'COAST ROAD 9', time: '7:15 PM', flavor: 'CHASING THE LIGHT' },
-  { src: 'samples/neon-arcade.jpg', role: 'THE LOOKOUT', place: 'NEON MILE', time: '11:58 PM', flavor: 'OUT PAST CURFEW' },
-  { src: 'samples/rider-night.jpg', role: 'THE WHEELMAN', place: 'DUSK RIDGE', time: '8:05 PM', flavor: 'ONE LAST RIDE' },
-  { src: 'samples/speedboat.jpg', role: 'THE PILOT', place: 'CORAL SHORE', time: '5:50 PM', flavor: 'THE WHOLE COAST' },
-  { src: 'samples/skyline-dusk.jpg', role: 'THE SPOTTER', place: 'SKYLINE ROOF', time: '9:10 PM', flavor: 'EYES ON THE CITY' },
-  { src: 'samples/gas-neon.jpg', role: 'THE FIXER', place: 'PALM FUEL', time: '1:20 AM', flavor: 'RAIN ON NEON' },
-  { src: 'samples/coast-aerial.jpg', role: 'THE RUNNER', place: 'CLIFF RUN', time: '7:02 PM', flavor: 'NO BRAKES DOWNHILL' },
-  { src: 'samples/marina-dawn.jpg', role: 'THE ANGLER', place: 'HARBOR LIGHTS', time: '6:05 AM', flavor: 'FIRST CAST' },
-  { src: 'samples/boulevard-palms.jpg', role: 'THE CAPTAIN', place: 'SUNSET ROW', time: '6:42 PM', flavor: 'GOLDEN HOUR RUN' },
-  { src: 'samples/diner-night.jpg', role: 'THE DEALER', place: 'THE DINER', time: '12:40 AM', flavor: 'COFFEE AND ALIBIS' },
-  { src: 'samples/beach-bonfire.jpg', role: 'THE GHOST', place: 'BOARDWALK', time: '7:30 PM', flavor: 'SPARKS AND SALT AIR' },
+export const SAMPLES = [
+  { id: 'hero-driver', file: 'hero-driver.jpg', label: 'Hero driver', px: 0.5, py: 0.32 },
+  { id: 'duo-convertible', file: 'duo-convertible.jpg', label: 'Coastal duo', px: 0.5, py: 0.45 },
+  { id: 'neon-arcade', file: 'neon-arcade.jpg', label: 'Neon arcade', px: 0.5, py: 0.3 },
+  { id: 'rider-night', file: 'rider-night.jpg', label: 'Night rider', px: 0.5, py: 0.4 },
+  { id: 'speedboat', file: 'speedboat.jpg', label: 'Speedboat', px: 0.5, py: 0.5 },
+  { id: 'skyline-dusk', file: 'skyline-dusk.jpg', label: 'Skyline dusk', px: 0.5, py: 0.45 },
+  { id: 'gas-neon', file: 'gas-neon.jpg', label: 'Gas station neon', px: 0.5, py: 0.35 },
+  { id: 'coast-aerial', file: 'coast-aerial.jpg', label: 'Coast aerial', px: 0.5, py: 0.5 },
+  { id: 'marina-dawn', file: 'marina-dawn.jpg', label: 'Marina dawn', px: 0.5, py: 0.5 },
+  { id: 'boulevard-palms', file: 'boulevard-palms.jpg', label: 'Boulevard palms', px: 0.5, py: 0.45 },
+  { id: 'diner-night', file: 'diner-night.jpg', label: 'Diner night', px: 0.5, py: 0.4 },
+  { id: 'beach-bonfire', file: 'beach-bonfire.jpg', label: 'Beach bonfire', px: 0.5, py: 0.55 },
 ];
 
-// The cache of loaded images, keyed by src. Uploads land here too, under
-// their object URL, so the renderer never cares where a photo came from.
-const imageCache = new Map();
+export function sampleById(id) {
+  return SAMPLES.find((sample) => sample.id === id) || SAMPLES[0];
+}
 
-// The resolved <img> per src (null when a file failed to load). Filled in
-// when a load finishes; the renderer reads this, never the promises.
-const loadedImages = new Map();
+const cache = new Map();
 
-// Loads one image (from the cache when already loaded). Resolves with the
-// <img> element, or with null when the file cannot be read.
-function loadImage(src) {
-  const hit = imageCache.get(src);
-  if (hit) return hit;
-  const p = new Promise((resolve) => {
+// The image already loaded for a key, or null when it is not loaded yet.
+// The renderer is synchronous, so it only ever draws what is cached.
+export function getCachedPhoto(key) {
+  return cache.get(key) || null;
+}
+
+// Load one sample photo (or an uploaded data: URL) and cache it by key.
+export function loadPhoto(key, src) {
+  if (cache.has(key)) return Promise.resolve(cache.get(key));
+  return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => { loadedImages.set(src, img); resolve(img); };
-    img.onerror = () => { loadedImages.set(src, null); resolve(null); };
+    img.onload = () => {
+      cache.set(key, img);
+      resolve(img);
+    };
+    img.onerror = () => reject(new Error(`could not load photo ${key}`));
     img.src = src;
   });
-  imageCache.set(src, p);
-  return p;
 }
 
-// Preloads every sample photo. The cover renders once they resolve, so a
-// first paint never shows an empty panel.
-function preloadSamples() {
-  return Promise.all(SAMPLES.map((s) => loadImage(s.src)));
+export function photoSrc(sample) {
+  return `./samples/${sample.file}`;
 }
 
-// The natural aspect ratio of a loaded image (width / height), or 1.5
-// while it is still loading, so layout math never divides by zero.
-function imageAspect(img) {
-  if (!img || !img.naturalWidth) return 1.5;
-  return img.naturalWidth / img.naturalHeight;
+export function preloadPhotos() {
+  return Promise.all(
+    SAMPLES.map((sample) => loadPhoto(sample.id, photoSrc(sample)).catch(() => null)),
+  );
 }
 
-// Draws an image cover-fit into a rect: scaled so it always covers the
-// rect, then offset by the pan (px, py in 0..1) and the zoom (>= 1). The
-// caller clips to the panel first; this never draws outside the rect.
-function drawPhotoCover(ctx, img, x, y, w, h, zoom, px, py) {
-  if (!img) return;
-  const z = Math.max(1, zoom || 1);
-  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight) * z;
-  const dw = img.naturalWidth * scale;
-  const dh = img.naturalHeight * scale;
+// Draw an image so it covers rect (x, y, w, h) with no edge ever showing.
+// zoom multiplies the cover scale; px/py (0..1) pick the focal point the
+// crop centres on, clamped so the photo can never slide past its own edge.
+export function drawCoverPhoto(ctx, img, x, y, w, h, zoom, px, py) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  const base = Math.max(w / iw, h / ih);
+  const scale = base * (zoom || 1);
+  const dw = iw * scale;
+  const dh = ih * scale;
   const fx = Math.min(1, Math.max(0, px == null ? 0.5 : px));
   const fy = Math.min(1, Math.max(0, py == null ? 0.5 : py));
-  const dx = x + (w - dw) * fx;
-  const dy = y + (h - dh) * fy;
+  // The focal point sits at (fx, fy) of the drawn image; clamp the offset
+  // so the drawn image always covers the rect.
+  let dx = x + w / 2 - fx * dw;
+  let dy = y + h / 2 - fy * dh;
+  dx = Math.min(x, Math.max(x + w - dw, dx));
+  dy = Math.min(y, Math.max(y + h - dh, dy));
   ctx.drawImage(img, dx, dy, dw, dh);
 }

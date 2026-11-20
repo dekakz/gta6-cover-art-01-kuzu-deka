@@ -1,24 +1,27 @@
-// Screenshot presets: ?shot=cover|editor|portrait|square on the page URL
-// picks a preset and a size and (for the cover shots) hides the editor
-// chrome so the frame is the cover alone. The screenshot driver uses
-// these; a person opening the page normally never sees them.
-'use strict';
+// shots.js — screenshot presets driven by the URL query string.
+//
+//   ?shot=cover&preset=sunset-chase&size=1920x1080   full-bleed cover
+//   ?shot=editor&preset=neon-vice                   the editor, a photo loaded
+//
+// The maker uses these to take the entry's screenshots; the app itself
+// never needs them. Unknown values fall back to the defaults.
 
-const SHOT_PRESETS = {
-  cover: { preset: 'sunset-chase', size: '1920x1080', mode: 'cover' },
-  editor: { preset: 'sunset-chase', size: '1920x1080', mode: 'editor' },
-  portrait: { preset: 'neon-vice', size: '1080x1350', mode: 'cover' },
-  square: { preset: 'coral-heat', size: '1080x1080', mode: 'cover' },
-};
+import { presetById, applyPreset } from './editor.js';
+import { layoutById } from './layouts.js';
+import { gradeById } from './grades.js';
+import { sizeById } from './export.js';
 
-// The shot named by ?shot=, or null for a normal visit.
-function getShot() {
-  let name = null;
-  try {
-    name = new URLSearchParams(window.location.search).get('shot');
-  } catch (e) {
-    name = null;
-  }
-  if (!name || !SHOT_PRESETS[name]) return null;
-  return { name, ...SHOT_PRESETS[name] };
+export function applyShotParams(state) {
+  const params = new URLSearchParams(window.location.search);
+  const shot = params.get('shot');
+  if (params.get('preset')) applyPreset(state, params.get('preset'));
+  if (params.get('layout')) state.layoutId = layoutById(params.get('layout')).id;
+  if (params.get('grade')) state.gradeId = gradeById(params.get('grade')).id;
+  if (params.get('size')) state.sizeId = sizeById(params.get('size')).id;
+  if (params.get('title')) state.title = params.get('title').toUpperCase();
+  if (params.get('tagline')) state.tagline = params.get('tagline');
+  if (params.get('quote')) state.quote = params.get('quote');
+  if (params.get('source')) state.quoteSource = params.get('source').toUpperCase();
+  if (params.get('style')) state.titleStyle = params.get('style');
+  return { shot: shot === 'cover' || shot === 'editor' ? shot : null };
 }

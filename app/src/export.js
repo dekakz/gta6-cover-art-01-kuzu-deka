@@ -1,60 +1,64 @@
-// PNG export: renders the cover offscreen at the exact post size and
-// downloads it. The export waits for the bundled fonts first, so an
-// export can never fall back to a system font.
-'use strict';
+// export.js — PNG export in the three post sizes. Every export re-renders
+// the cover at the exact pixel size, so the PNG is the preview, sharper.
 
-const EXPORT_SIZES = {
-  '1920x1080': [1920, 1080],
-  '1080x1080': [1080, 1080],
-  '1080x1350': [1080, 1350],
-};
+import { renderCover } from './cover.js';
 
-// Waits until the four bundled fonts are usable at the sizes the cover
-// needs (Anton for the title, Pacifico for the tagline, Oswald for chips,
-// Bebas Neue for the ribbon).
-function waitForCoverFonts() {
-  if (!document.fonts || !document.fonts.load) return Promise.resolve();
-  return Promise.all([
-    document.fonts.load('400 100px Anton'),
-    document.fonts.load('400 40px Pacifico'),
-    document.fonts.load('600 20px Oswald'),
-    document.fonts.load('400 20px "Bebas Neue"'),
-    document.fonts.ready,
-  ]).catch(() => undefined);
+export const SIZES = [
+  { id: '1080x1080', w: 1080, h: 1080, label: 'Square · 1080 × 1080' },
+  { id: '1080x1350', w: 1080, h: 1350, label: 'Portrait · 1080 × 1350' },
+  { id: '1920x1080', w: 1920, h: 1080, label: 'Landscape · 1920 × 1080' },
+];
+
+export function sizeById(id) {
+  return SIZES.find((size) => size.id === id) || SIZES[0];
 }
 
-// Renders one PNG of the cover at `sizeKey` and downloads it as
-// solmar-bay-cover-<size>.png. Returns a promise for the blob.
-async function exportPNG(state, sizeKey) {
-  await waitForCoverFonts();
-  const dims = EXPORT_SIZES[sizeKey];
-  if (!dims) throw new Error(`unknown size ${sizeKey}`);
-  const [w, h] = dims;
+function slugTitle(title) {
+  return String(title || 'cover')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'cover';
+}
+
+// Render one size to an offscreen canvas and return it (plus its blob).
+export async function renderExport(state, sizeId, resolvePhoto) {
+  const size = sizeById(sizeId);
+  await document.fonts.ready;
   const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  renderCover(canvas.getContext('2d'), state, w, h);
+  canvas.width = size.w;
+  canvas.height = size.h;
+  const ctx = canvas.getContext('2d');
+  renderCover(ctx, state, size.w, size.h, resolvePhoto);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  return { canvas, blob, size };
+}
+
+// Download one PNG of the cover at sizeId.
+export async function exportPNG(state, sizeId, resolvePhoto) {
+  const { blob, size } = await renderExport(state, sizeId, resolvePhoto);
+  const name = `solmar-bay-cover-${size.w}x${size.h}.png`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `solmar-bay-cover-${sizeKey}.png`;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-  return blob;
+  return { name, bytes: blob.size, size };
 }
 
-// Exports all three post sizes, one after another, and reports progress
-// into #exportNote. A short pause between downloads keeps the browser
-// from dropping one.
-async function exportAll(state, noteEl) {
-  const keys = Object.keys(EXPORT_SIZES);
-  for (let i = 0; i < keys.length; i++) {
-    if (noteEl) noteEl.textContent = `Exporting ${i + 1} of ${keys.length}…`;
-    await exportPNG(state, keys[i]);
-    await new Promise((r) => setTimeout(r, 350));
+// Download all three sizes, one after another. Returns the three results.
+export async function exportAll(state, resolvePhoto, onStep) {
+  const results = [];
+  for (const size of SIZES) {
+    const result = await exportPNG(state, size.id, resolvePhoto);
+    results.push(result);
+    if (onStep) onStep(result);
+    await new Promise((resolve) => setTimeout(resolve, 350));
   }
-  if (noteEl) noteEl.textContent = 'Done — 3 PNGs downloaded.';
+  return results;
 }
+
+export { slugTitle };

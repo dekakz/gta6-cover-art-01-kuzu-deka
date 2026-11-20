@@ -1,297 +1,345 @@
-// The full cover renderer: photos, grade, seams, role tags, story
-// captions, scrim, lettering, stickers and the bottom strip, drawn onto
-// any canvas at any size. The photo area is the top 93% of the canvas;
-// the bottom 7% is the strip. Nothing is drawn outside the canvas, text
-// is measured before it is placed, and every photo is clipped to its
-// panel, so a photo can never bleed into its neighbour.
-'use strict';
+// cover.js — the cover renderer.
+//
+// Panels first, then lettering and stickers, then the story chips. The
+// chips are the fussy part: every role tag and caption is measured first
+// and placed where it cannot touch the title, the WANTED pill, the quote
+// chip, the bottom strip, or any chip placed before it. A chip that fits
+// nowhere is dropped rather than drawn over something else.
 
-const PHOTO_AREA = 0.93;
+import { layoutById, panelRect, panelPath } from './layouts.js';
+import { gradeById } from './grades.js';
+import { drawTitle, drawTagline, drawQuoteChip, fitTitleSize } from './lettering.js';
+import { drawWanted, drawVol, drawSeal, drawBottomStrip, drawPalm } from './stickers.js';
+import { drawCoverPhoto, sampleById } from './photos.js';
 
-// Renders the whole cover for `state` onto `ctx` at W x H pixels.
-function renderCover(ctx, state, W, H) {
-  const photoH = H * PHOTO_AREA;
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#160a1e';
+const LABEL_FONT = '"Bebas Neue", "Arial Narrow", sans-serif';
+const CHIP_FONT = 'Oswald, sans-serif';
+
+function overlaps(a, b, pad) {
+  if (!a || !b) return false;
+  const p = pad || 0;
+  return (
+    a.x - p < b.x + b.w + p &&
+    a.x + a.w + p > b.x - p &&
+    a.y - p < b.y + b.h + p &&
+    a.y + a.h + p > b.y - p
+  );
+}
+
+function inside(inner, outer, tol) {
+  const t = tol || 0;
+  return (
+    inner.x >= outer.x - t &&
+    inner.y >= outer.y - t &&
+    inner.x + inner.w <= outer.x + outer.w + t &&
+    inner.y + inner.h <= outer.y + outer.h + t
+  );
+}
+
+function wrapText(ctx, text, maxW) {
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const trial = line ? `${line} ${word}` : word;
+    if (ctx.measureText(trial).width <= maxW || !line) {
+      line = trial;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 2);
+}
+
+// Measure one panel's chip group (role tag over caption chip) without
+// drawing it. Returns null when the panel has nothing to say.
+function measureChipGroup(ctx, panelState, maxCaptionW, k) {
+  const role = String(panelState.role || '').trim();
+  const caption = String(panelState.caption || '').trim();
+  if (!role && !caption) return null;
+
+  let roleW = 0;
+  let roleH = 0;
+  if (role) {
+    const px = Math.round(19 * k);
+    ctx.font = `400 ${px}px ${LABEL_FONT}`;
+    roleW = Math.round(ctx.measureText(role.toUpperCase()).width + 20 * k);
+    roleH = Math.round(26 * k);
+  }
+
+  let captionLines = [];
+  let captionW = 0;
+  let captionH = 0;
+  if (caption) {
+    const px = Math.round(15 * k);
+    ctx.font = `600 ${px}px ${CHIP_FONT}`;
+    captionLines = wrapText(ctx, caption, maxCaptionW);
+    captionW = Math.round(Math.max(...captionLines.map((l) => ctx.measureText(l).width)) + 20 * k);
+    captionH = Math.round(captionLines.length * px * 1.3 + 12 * k);
+  }
+
+  const w = Math.max(roleW, captionW);
+  const h = roleH + (caption ? 4 * k + captionH : 0);
+  return { role, caption, captionLines, roleW, roleH, captionW, captionH, w, h };
+}
+
+function drawChipGroup(ctx, group, x, y, grade, k) {
+  let cy = y;
+  if (group.role) {
+    ctx.save();
+    ctx.fillStyle = grade.accent;
+    ctx.beginPath();
+    ctx.rect(x, cy, group.roleW, group.roleH);
+    ctx.fill();
+    ctx.fillStyle = grade.accentInk;
+    ctx.font = `400 ${Math.round(19 * k)}px ${LABEL_FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(group.role.toUpperCase(), x + 10 * k, cy + group.roleH / 2 + 1);
+    ctx.restore();
+    cy += group.roleH + 4 * k;
+  }
+  if (group.caption) {
+    const px = Math.round(15 * k);
+    ctx.save();
+    ctx.fillStyle = 'rgba(13, 10, 20, 0.88)';
+    ctx.beginPath();
+    ctx.rect(x, cy, group.captionW, group.captionH);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `600 ${px}px ${CHIP_FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    group.captionLines.forEach((line, i) => {
+      ctx.fillText(line, x + 10 * k, cy + 6 * k + i * px * 1.3);
+    });
+    ctx.restore();
+  }
+}
+
+// Render the whole cover for `state` onto ctx at W x H.
+// resolvePhoto(panelState) returns the Image for a panel (sample or upload).
+// opts.selected highlights one panel index for the editor.
+// Returns a debug record of every placed rect, for QA.
+export function renderCover(ctx, state, W, H, resolvePhoto, opts) {
+  const o = opts || {};
+  const k = Math.min(W, H) / 1080;
+  const layout = layoutById(state.layoutId);
+  const grade = gradeById(state.gradeId);
+  const debug = { chips: [], skipped: [], seal: null, titleZone: null };
+
+  ctx.save();
+  ctx.fillStyle = '#0d0a14';
   ctx.fillRect(0, 0, W, H);
 
-  const panels = layoutPanels(state.layout, W, photoH);
-  const grade = GRADES[state.grade] || GRADES.sunset;
-
-  // --- Photos, one per panel, clipped to its polygon. ---
-  panels.forEach((panel, i) => {
-    const slot = state.panels[Math.min(i, state.panels.length - 1)];
-    const src = state.onePhoto ? state.panels[0].src : slot.src;
+  // 1. Panels: photo, grade tint, dark gutter.
+  layout.panels.forEach((panel, i) => {
+    const rect = panelRect(panel, W, H);
+    const panelState = state.panels[i] || {};
+    // One-photo mode: every panel shows the first panel's photo.
+    const photoState = state.onePhoto ? state.panels[0] || panelState : panelState;
+    const sample = sampleById(photoState.photo);
     ctx.save();
-    tracePanel(ctx, panel);
+    panelPath(ctx, rect);
     ctx.clip();
-    drawPanelPhoto(ctx, src, panel, slot);
+    const img = resolvePhoto ? resolvePhoto(photoState) : null;
+    if (img) {
+      drawCoverPhoto(
+        ctx,
+        img,
+        rect.x,
+        rect.y,
+        rect.w,
+        rect.h,
+        photoState.zoom || 1,
+        photoState.px == null ? sample.px : photoState.px,
+        photoState.py == null ? sample.py : photoState.py,
+      );
+    } else {
+      ctx.fillStyle = '#241a33';
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    }
+    ctx.fillStyle = grade.tint;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
     ctx.restore();
   });
-
-  // --- Grade tint, warm foot gradient and vignette over the photos. ---
-  ctx.save();
-  ctx.fillStyle = grade.tint;
-  ctx.fillRect(0, 0, W, photoH);
-  const foot = ctx.createLinearGradient(0, photoH * 0.55, 0, photoH);
-  foot.addColorStop(0, 'rgba(255,90,40,0)');
-  foot.addColorStop(1, 'rgba(255,90,40,0.12)');
-  ctx.fillStyle = foot;
-  ctx.fillRect(0, photoH * 0.55, W, photoH * 0.45);
-  const vig = ctx.createRadialGradient(W / 2, photoH / 2, Math.min(W, photoH) * 0.42, W / 2, photoH / 2, Math.max(W, photoH) * 0.75);
-  vig.addColorStop(0, 'rgba(0,0,0,0)');
-  vig.addColorStop(1, 'rgba(0,0,0,0.20)');
-  ctx.fillStyle = vig;
-  ctx.fillRect(0, 0, W, photoH);
-  ctx.restore();
-
-  // --- Panel seams and the outer frame. ---
-  ctx.save();
-  ctx.strokeStyle = '#0d0208';
-  ctx.lineWidth = Math.max(2, W * 0.0025);
-  panels.forEach((panel) => {
-    tracePanel(ctx, panel);
+  ctx.lineWidth = Math.max(2, 3 * k);
+  ctx.strokeStyle = '#0d0a14';
+  layout.panels.forEach((panel) => {
+    panelPath(ctx, panelRect(panel, W, H));
     ctx.stroke();
   });
-  ctx.lineWidth = Math.max(3, W * 0.0035);
-  ctx.strokeRect(0, 0, W, photoH);
-  ctx.restore();
 
-  // --- Scrim behind the title zone, so the letters stay legible over
-  // any photo, however bright. It goes down before the chips, so the
-  // chips stay bright on top of it. ---
-  const zone = { x: 0, y: photoH * 0.50, w: W, h: photoH * 0.36 };
-  drawTitleScrim(ctx, grade, W, photoH);
+  // Selected panel outline (editor only).
+  if (o.selected != null && layout.panels[o.selected]) {
+    ctx.save();
+    ctx.lineWidth = Math.max(3, 5 * k);
+    ctx.strokeStyle = grade.accent;
+    panelPath(ctx, panelRect(layout.panels[o.selected], W, H));
+    ctx.stroke();
+    ctx.restore();
+  }
 
-  // --- Role tags and story captions. ---
-  const pillRect = state.wanted ? measureWantedPill(ctx, state, W, photoH) : null;
-  const titleZoneRect = { x: W * 0.03, y: photoH * 0.50, w: W * 0.94, h: photoH * 0.36 };
-  const chipRects = [];
-  panels.forEach((panel, i) => {
-    const slot = state.panels[Math.min(i, state.panels.length - 1)];
-    if (state.layout !== 'single') {
-      const rects = drawPanelChips(ctx, panel, slot, grade, photoH, pillRect, titleZoneRect);
-      if (rects.role) chipRects.push(rects.role);
-      if (rects.cap) chipRects.push(rects.cap);
-    } else {
-      const rect = drawRoleTagOnly(ctx, panel, slot, grade);
-      if (rect) chipRects.push(rect);
-    }
+  // 2. Top row: WANTED left, VOL right, quote chip between them.
+  const wanted = drawWanted(ctx, W * 0.025, H * 0.022, k);
+  const volPx = Math.round(18 * k);
+  ctx.font = `400 ${volPx}px ${LABEL_FONT}`;
+  const volW = Math.round(ctx.measureText('VOL. 01').width + 22 * k);
+  const vol = drawVol(ctx, W * 0.975 - volW, H * 0.022, k);
+  const qx0 = wanted.x + wanted.w + 12 * k;
+  const qx1 = vol.x - 12 * k;
+  const quote = drawQuoteChip(ctx, {
+    quote: state.quote,
+    source: state.quoteSource,
+    cx: (qx0 + qx1) / 2,
+    y: H * 0.022,
+    maxW: Math.max(120, qx1 - qx0),
+    k,
   });
 
-  // --- Lettering. ---
-  const title = drawTitle(ctx, state, W, zone);
-  drawTagline(ctx, state, W, title.bottom, title.fontSize);
-  const quoteTop = drawQuoteChip(ctx, state, W, title.top);
-  drawLocationLabel(ctx, state, W, quoteTop);
-
-  // --- Stickers. ---
-  if (state.wanted) {
-    const pill = drawWantedPill(ctx, state, W, photoH);
-    drawVolChip(ctx, state, W, pill);
+  // 3. Title, centred on 44% height, tagline under it.
+  const titleMaxW = W * 0.94;
+  const titleStartPx = Math.round(W * 0.165);
+  const { px: titlePx, lines } = fitTitleSize(ctx, state.title, titleMaxW, titleStartPx);
+  const titleBlockH = lines.length * titlePx * 0.98;
+  const titleTop = H * 0.44 - titleBlockH / 2;
+  const titleDrawn = drawTitle(ctx, {
+    text: state.title,
+    cx: W / 2,
+    y: titleTop,
+    maxW: titleMaxW,
+    startPx: titleStartPx,
+    style: state.titleStyle || 'stripes',
+    grade,
+  });
+  const tagline = drawTagline(ctx, {
+    text: state.tagline,
+    cx: W / 2,
+    y: titleTop + titleBlockH + 6 * k,
+    maxW: W * 0.8,
+  });
+  // Dodge blockers are the TIGHT rects of the title lines and the tagline,
+  // not the full-width box: chips may sit beside a short title line or
+  // beside the tagline, where no letter actually is.
+  const pad = 6 * k;
+  const titleRects = (titleDrawn.lineRects || []).map((r) => ({
+    x: r.x - pad,
+    y: r.y - pad,
+    w: r.w + pad * 2,
+    h: r.h + pad * 2,
+  }));
+  if (tagline) {
+    titleRects.push({
+      x: tagline.x - pad,
+      y: tagline.y - pad,
+      w: tagline.w + pad * 2,
+      h: tagline.h + pad * 2,
+    });
   }
-  if (state.seal) {
-    // The seal goes on a panel seam; it tries the usual spot first, then
-    // alternates, and never covers a chip, the WANTED pill or the title.
-    const r = Math.max(26, W * 0.038);
-    const blocked = [...chipRects, titleZoneRect];
-    if (pillRect) blocked.push(pillRect);
-    const candidates = [
-      [W * 0.68, photoH * 0.335],
-      [W * 0.86, photoH * 0.16],
-      [W * 0.30, photoH * 0.16],
-      [W * 0.50, photoH * 0.335],
-      [W * 0.14, photoH * 0.16],
-    ];
-    let pos = candidates[0];
-    for (const [cx, cy] of candidates) {
-      const hit = blocked.some((b) => rectsOverlap(cx - r, cy - r, r * 2, r * 2, b.x, b.y, b.w, b.h));
-      if (!hit) { pos = [cx, cy]; break; }
-    }
-    drawGoldSeal(ctx, W, photoH, pos[0], pos[1]);
-  }
-  if (state.collectors) drawCollectorsPill(ctx, W, photoH);
-  if (state.ribbon) drawRibbon(ctx, W, photoH, state.barText);
-
-  // --- Bottom strip. ---
-  drawBottomStrip(ctx, state, W, H, photoH);
-}
-
-// Traces a panel's polygon (slant included) as the current path.
-function tracePanel(ctx, panel) {
-  const pts = panelPolygon(panel);
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  ctx.closePath();
-}
-
-// Draws one panel's photo (or a dark placeholder while it loads).
-function drawPanelPhoto(ctx, src, panel, slot) {
-  const img = loadedImages.get(src);
-  if (img) {
-    drawPhotoCover(ctx, img, panel.x, panel.y, panel.w, panel.h, slot.zoom, slot.px, slot.py);
-    return;
-  }
-  // Not loaded yet (or failed): paint a dark stand-in so no white gap shows.
-  const g = ctx.createLinearGradient(panel.x, panel.y, panel.x + panel.w, panel.y + panel.h);
-  g.addColorStop(0, '#2a0f38');
-  g.addColorStop(1, '#160a1e');
-  ctx.fillStyle = g;
-  ctx.fillRect(panel.x, panel.y, panel.w, panel.h);
-}
-
-// The soft dark band behind the title zone, so the letters stay legible
-// over any photo, however bright.
-function drawTitleScrim(ctx, grade, W, photoH) {
-  const g = ctx.createLinearGradient(0, photoH * 0.44, 0, photoH * 0.94);
-  g.addColorStop(0, 'rgba(12,4,24,0)');
-  g.addColorStop(0.22, grade.scrim);
-  g.addColorStop(0.85, grade.scrim);
-  g.addColorStop(1, 'rgba(12,4,24,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, photoH * 0.44, W, photoH * 0.50);
-}
-
-// Whether two rectangles overlap (used for the chip-dodging below).
-function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
-  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
-}
-
-// One panel's chips, placed so nothing ever overlaps. The role tag sits
-// top-left and the story caption bottom-left by default. Either chip
-// moves when its default spot would land under the title zone (the title
-// is drawn later and would cover it): the caption goes under the role tag
-// at the top when the panel's foot is in the zone but its head is clear,
-// and the role tag goes above the caption at the foot when its head is in
-// the zone but its foot is clear. When the role tag would run under the
-// WANTED pill, it moves to the bottom stack above the caption; when there
-// is no room at all, a chip is dropped rather than drawn under something.
-// Tiny panels keep the role tag only. Returns the rectangles actually
-// drawn, {role, cap}, so the seal can dodge them.
-function drawPanelChips(ctx, panel, slot, grade, photoH, pillRect, titleZone) {
-  const role = (slot.role || '').toUpperCase();
-  const place = (slot.place || '').toUpperCase();
-  const flavor = (slot.flavor || '').toUpperCase();
-  const time = slot.time || '';
-  const padX = Math.max(4, panel.w * 0.02);
-  const padY = Math.max(4, panel.h * 0.03);
-  const x = panel.x + padX + (panel.slant || 0) * 0.5;
-  const topY = panel.y + padY;
-
-  // Role tag metrics: sized to the panel, never oversized.
-  let roleBox = null;
-  if (role) {
-    const fs = Math.max(11, Math.min(30, panel.w * 0.055, panel.h * 0.075));
-    ctx.font = `600 ${fs}px Oswald`;
-    const tw = ctx.measureText(role).width;
-    roleBox = { fs, w: tw + fs * 1.75, h: fs * 1.85, x, y: topY };
-  }
-
-  // Caption metrics (skipped on tiny panels).
-  let capBox = null;
-  const small = panel.w < photoH * 0.22 || panel.h < photoH * 0.16;
-  if (!small && (place || flavor)) {
-    const fs = Math.max(10, Math.min(panel.w * 0.055, photoH * 0.020));
-    const fs2 = fs * 0.82;
-    ctx.font = `600 ${fs}px Oswald`;
-    const line1 = time ? `${place}  ·  ${time}` : place;
-    const w1 = ctx.measureText(line1).width;
-    ctx.font = `400 ${fs2}px Oswald`;
-    const w2 = ctx.measureText(flavor).width;
-    const pad = fs * 0.8;
-    capBox = { fs, fs2, line1, flavor, pad, w: Math.max(w1, w2) + pad * 2, h: fs * 1.7 + fs2 * 1.25 + pad * 0.7, x };
-  }
-
-  const inTitleZone = (r) => rectsOverlap(r.x, r.y, r.w, r.h, titleZone.x, titleZone.y, titleZone.w, titleZone.h);
-  const fitsInPanel = (r) => r.y >= panel.y + 2 && r.y + r.h <= panel.y + panel.h - 2;
-
-  // Caption first: bottom-left, unless that lands under the title, in
-  // which case it stacks under the role tag at the top.
-  let capPos = null;
-  if (capBox) {
-    const bottom = { x: capBox.x, y: panel.y + panel.h - capBox.h - padY, w: capBox.w, h: capBox.h };
-    if (!inTitleZone(bottom)) {
-      capPos = bottom;
-    } else if (roleBox) {
-      const stacked = { x: capBox.x, y: roleBox.y + roleBox.h + roleBox.fs * 0.45, w: capBox.w, h: capBox.h };
-      if (fitsInPanel(stacked) && !inTitleZone(stacked)) capPos = stacked;
-    }
-  }
-
-  // Role tag: top-left, unless that lands under the title, in which case
-  // it goes to the bottom stack above the caption.
-  let rolePos = null;
-  if (roleBox) {
-    const top = { x: roleBox.x, y: roleBox.y, w: roleBox.w, h: roleBox.h };
-    if (!inTitleZone(top)) {
-      rolePos = top;
-    } else {
-      const aboveCap = capPos
-        ? { x: roleBox.x, y: capPos.y - roleBox.h - roleBox.fs * 0.4, w: roleBox.w, h: roleBox.h }
-        : { x: roleBox.x, y: panel.y + panel.h - roleBox.h - padY, w: roleBox.w, h: roleBox.h };
-      if (fitsInPanel(aboveCap) && !inTitleZone(aboveCap)) rolePos = aboveCap;
-    }
-  }
-
-  // WANTED-pill dodge: the tag moves to the bottom stack, above the
-  // caption; when there is no room at all, the tag is dropped, never
-  // drawn under the pill.
-  if (rolePos && pillRect && rectsOverlap(rolePos.x, rolePos.y, roleBox.w, roleBox.h, pillRect.x, pillRect.y, pillRect.w, pillRect.h)) {
-    const dodge = capPos
-      ? { x: roleBox.x, y: capPos.y - roleBox.h - roleBox.fs * 0.4, w: roleBox.w, h: roleBox.h }
-      : { x: roleBox.x, y: panel.y + panel.h - roleBox.h - padY, w: roleBox.w, h: roleBox.h };
-    rolePos = fitsInPanel(dodge) && !inTitleZone(dodge) ? dodge : null;
-  }
-
-  if (rolePos) drawRoleTagAt(ctx, role, roleBox, rolePos, grade);
-  if (capPos && capBox) drawCaptionChipAt(ctx, capBox, capPos);
-  return {
-    role: rolePos ? { x: rolePos.x, y: rolePos.y, w: roleBox.w, h: roleBox.h } : null,
-    cap: capPos ? { x: capPos.x, y: capPos.y, w: capBox.w, h: capBox.h } : null,
+  const titleZone = {
+    x: W * 0.03,
+    y: titleTop - 6 * k,
+    w: W * 0.94,
+    h: titleBlockH + 12 * k + (tagline ? tagline.h + 6 * k : 0),
   };
-}
+  debug.titleZone = titleZone;
+  debug.titleLines = titleRects;
 
-// The single-photo layout shows a role tag only, bottom-left, clear of
-// the title zone. Returns the rectangle drawn, or null.
-function drawRoleTagOnly(ctx, panel, slot, grade) {
-  const role = (slot.role || '').toUpperCase();
-  if (!role) return null;
-  const fs = Math.max(14, Math.min(34, panel.w * 0.028));
-  ctx.font = `600 ${fs}px Oswald`;
-  const tw = ctx.measureText(role).width;
-  const box = { fs, w: tw + fs * 1.75, h: fs * 1.85, x: panel.x + 14, y: 0 };
-  const pos = { x: box.x, y: panel.y + panel.h - box.h - 14 };
-  drawRoleTagAt(ctx, role, box, pos, grade);
-  return { x: pos.x, y: pos.y, w: box.w, h: box.h };
-}
+  // 4. Bottom strip (fixed) and corner palms (decoration, under chips).
+  const strip = drawBottomStrip(ctx, W, H, k);
+  const palmSize = H * 0.085;
+  ctx.save();
+  drawPalm(ctx, W * 0.02, H - strip.h - 4 * k, palmSize, 'rgba(13, 10, 20, 0.5)');
+  ctx.translate(W, 0);
+  ctx.scale(-1, 1);
+  drawPalm(ctx, W * 0.02, H - strip.h - 4 * k, palmSize, 'rgba(13, 10, 20, 0.5)');
+  ctx.restore();
 
-// A role tag: a black chip with an accent tab, drawn at `pos`.
-function drawRoleTagAt(ctx, role, box, pos, grade) {
-  ctx.fillStyle = 'rgba(10,4,18,0.88)';
-  ctx.fillRect(pos.x, pos.y, box.w, box.h);
-  ctx.fillStyle = grade.accent;
-  ctx.fillRect(pos.x, pos.y, box.fs * 0.35, box.h);
-  ctx.fillStyle = '#fff7d6';
-  ctx.font = `600 ${box.fs}px Oswald`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(role, pos.x + box.fs * 0.7 + box.fs * 0.35, pos.y + box.h / 2 + 1);
-}
+  // 5. Story chips, dodge-aware.
+  const blockers = [...titleRects, quote, wanted, vol, strip].filter(Boolean);
+  const placed = [];
+  const inset = 12 * k;
+  layout.panels.forEach((panel, i) => {
+    const panelState = state.panels[i] || {};
+    const clean = { x: panel.x * W, y: panel.y * H, w: panel.w * W, h: panel.h * H };
+    const group = measureChipGroup(ctx, panelState, Math.min(clean.w - inset * 2, W * 0.5), k);
+    if (!group) return;
+    const anchors = [
+      { x: clean.x + inset, y: clean.y + clean.h - inset - group.h }, // bottom-left
+      { x: clean.x + inset, y: clean.y + inset }, // top-left
+      { x: clean.x + clean.w - inset - group.w, y: clean.y + clean.h - inset - group.h }, // bottom-right
+      { x: clean.x + clean.w - inset - group.w, y: clean.y + inset }, // top-right
+    ];
+    let spot = null;
+    for (const a of anchors) {
+      const rect = { x: a.x, y: a.y, w: group.w, h: group.h };
+      if (!inside(rect, clean, 2)) continue;
+      if (blockers.some((b) => overlaps(rect, b, 3 * k))) continue;
+      if (placed.some((p) => overlaps(rect, p, 3 * k))) continue;
+      spot = rect;
+      break;
+    }
+    // Nudge-up fallback: slide the bottom-left spot up until it clears.
+    if (!spot) {
+      for (let step = 1; step <= 6; step++) {
+        const rect = {
+          x: clean.x + inset,
+          y: clean.y + clean.h - inset - group.h - step * (group.h + 8 * k),
+          w: group.w,
+          h: group.h,
+        };
+        if (!inside(rect, clean, 2)) break;
+        if (blockers.some((b) => overlaps(rect, b, 3 * k))) continue;
+        if (placed.some((p) => overlaps(rect, p, 3 * k))) continue;
+        spot = rect;
+        break;
+      }
+    }
+    // Role-only fallback at the bottom-left corner.
+    if (!spot && group.role) {
+      const solo = { ...group, caption: '', captionLines: [], captionW: 0, captionH: 0, w: group.roleW, h: group.roleH };
+      const rect = { x: clean.x + inset, y: clean.y + clean.h - inset - solo.h, w: solo.w, h: solo.h };
+      if (
+        inside(rect, clean, 2) &&
+        !blockers.some((b) => overlaps(rect, b, 3 * k)) &&
+        !placed.some((p) => overlaps(rect, p, 3 * k))
+      ) {
+        drawChipGroup(ctx, solo, rect.x, rect.y, grade, k);
+        placed.push(rect);
+        debug.chips.push({ panel: i, rect, anchor: 'bottom-left-role-only', role: group.role, caption: '' });
+        return;
+      }
+    }
+    if (!spot) {
+      debug.skipped.push(i);
+      return;
+    }
+    drawChipGroup(ctx, group, spot.x, spot.y, grade, k);
+    placed.push(spot);
+    debug.chips.push({ panel: i, rect: spot, role: group.role, caption: group.caption });
+  });
 
-// A story caption chip: PLACE + time on the first line, the flavour line
-// under it, drawn at `pos`.
-function drawCaptionChipAt(ctx, cap, pos) {
-  ctx.fillStyle = 'rgba(10,4,18,0.86)';
-  ctx.fillRect(pos.x, pos.y, cap.w, cap.h);
-  ctx.fillStyle = '#ff5da2';
-  ctx.fillRect(pos.x, pos.y, cap.fs * 0.3, cap.h);
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.font = `600 ${cap.fs}px Oswald`;
-  ctx.fillStyle = '#fff7d6';
-  ctx.fillText(cap.line1, pos.x + cap.pad + cap.fs * 0.3, pos.y + cap.pad * 0.45 + cap.fs * 0.72);
-  ctx.font = `400 ${cap.fs2}px Oswald`;
-  ctx.fillStyle = 'rgba(255,247,214,0.85)';
-  ctx.fillText(cap.flavor, pos.x + cap.pad + cap.fs * 0.3, pos.y + cap.pad * 0.45 + cap.fs * 1.7 + cap.fs2 * 0.5);
+  // 6. Gold seal: first candidate spot clear of everything. Bottom corners
+  // first: faces sit high in a panel, so the bottom corners are the
+  // safest places for a seal.
+  const sealR = Math.max(26, H * 0.052);
+  const sealSpots = [
+    [0.14, 0.8],
+    [0.86, 0.8],
+    [0.14, 0.16],
+    [0.86, 0.16],
+    [0.5, 0.87],
+  ];
+  for (const [fx, fy] of sealSpots) {
+    const rect = { x: fx * W - sealR, y: fy * H - sealR, w: sealR * 2, h: sealR * 2 };
+    if (blockers.some((b) => overlaps(rect, b, 2 * k))) continue;
+    if (placed.some((p) => overlaps(rect, p, 2 * k))) continue;
+    debug.seal = drawSeal(ctx, fx * W, fy * H, sealR, grade);
+    break;
+  }
+
+  ctx.restore();
+  return debug;
 }

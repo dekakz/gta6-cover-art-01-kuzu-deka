@@ -1,125 +1,139 @@
-// Panel layouts for the cover: each layout is a list of panels covering the
-// photo area (the full canvas minus the bottom strip). Coordinates are
-// fractions of the photo area: x, y, w, h in 0..1. A panel may carry a
-// `slant` (fraction of its own width): its top edge shifts right by that
-// amount, which draws the diagonal comic-book seams the genre is known
-// for. Every layout uses at most 6 panels; the editor keeps 6 panel slots
-// and a layout simply uses the first N of them.
-'use strict';
+// layouts.js — the ten panel layouts of Solmar Bay Cover Studio.
+//
+// A layout is a list of panels in unit coordinates (0..1 across the cover).
+// Each panel has x, y, w, h and a slant: the slant shears the panel's top
+// edge sideways by slant * panel-height, which gives the diagonal cuts of
+// the more dynamic layouts. Panels are drawn back to front with a dark
+// gutter between them, so a slanted edge never leaves a gap.
 
-const LAYOUTS = {
-  'key-art': {
-    label: 'Key Art',
+export const LAYOUTS = [
+  {
+    id: 'key-art',
+    name: 'Key Art',
     panels: [
-      { x: 0, y: 0, w: 0.46, h: 0.66 },
-      { x: 0.46, y: 0, w: 0.27, h: 0.33 },
-      { x: 0.73, y: 0, w: 0.27, h: 0.33 },
-      { x: 0.46, y: 0.33, w: 0.54, h: 0.33 },
-      { x: 0, y: 0.66, w: 0.46, h: 0.34 },
-      { x: 0.46, y: 0.66, w: 0.54, h: 0.34 },
+      { x: 0.0, y: 0.0, w: 0.56, h: 1.0, slant: 0 },
+      { x: 0.56, y: 0.0, w: 0.44, h: 0.34, slant: 0 },
+      { x: 0.56, y: 0.34, w: 0.22, h: 0.33, slant: 0 },
+      { x: 0.78, y: 0.34, w: 0.22, h: 0.33, slant: 0 },
+      { x: 0.56, y: 0.67, w: 0.44, h: 0.33, slant: 0 },
     ],
   },
-  'grid-6': {
-    label: 'Grid 6',
+  {
+    id: 'duo-split',
+    name: 'Duo Split',
     panels: [
-      { x: 0, y: 0, w: 0.3333, h: 0.5 },
-      { x: 0.3333, y: 0, w: 0.3334, h: 0.5 },
-      { x: 0.6667, y: 0, w: 0.3333, h: 0.5 },
-      { x: 0, y: 0.5, w: 0.3333, h: 0.5 },
-      { x: 0.3333, y: 0.5, w: 0.3334, h: 0.5 },
-      { x: 0.6667, y: 0.5, w: 0.3333, h: 0.5 },
+      { x: 0.0, y: 0.0, w: 0.5, h: 1.0, slant: 0.05 },
+      { x: 0.5, y: 0.0, w: 0.5, h: 1.0, slant: -0.05 },
     ],
   },
-  duo: {
-    label: 'Duo',
+  {
+    id: 'triple-strip',
+    name: 'Triple Strip',
     panels: [
-      { x: 0, y: 0, w: 0.5, h: 1 },
-      { x: 0.5, y: 0, w: 0.5, h: 1 },
+      { x: 0.0, y: 0.0, w: 1.0, h: 0.36, slant: 0 },
+      { x: 0.0, y: 0.36, w: 1.0, h: 0.32, slant: 0 },
+      { x: 0.0, y: 0.68, w: 1.0, h: 0.32, slant: 0 },
     ],
   },
-  'trio-slant': {
-    label: 'Trio Slant',
+  {
+    id: 'quad-grid',
+    name: 'Quad Grid',
     panels: [
-      { x: 0, y: 0, w: 0.36, h: 1, slant: 0.06 },
-      { x: 0.34, y: 0, w: 0.34, h: 1, slant: 0.06 },
-      { x: 0.66, y: 0, w: 0.34, h: 1, slant: 0.06 },
+      { x: 0.0, y: 0.0, w: 0.5, h: 0.5, slant: 0 },
+      { x: 0.5, y: 0.0, w: 0.5, h: 0.5, slant: 0 },
+      { x: 0.0, y: 0.5, w: 0.5, h: 0.5, slant: 0 },
+      { x: 0.5, y: 0.5, w: 0.5, h: 0.5, slant: 0 },
     ],
   },
-  'hero-left': {
-    label: 'Hero Left',
+  {
+    id: 'hero-bottom',
+    name: 'Hero Bottom',
     panels: [
-      { x: 0, y: 0, w: 0.55, h: 1 },
-      { x: 0.55, y: 0, w: 0.45, h: 0.3333 },
-      { x: 0.55, y: 0.3333, w: 0.45, h: 0.3334 },
-      { x: 0.55, y: 0.6667, w: 0.45, h: 0.3333 },
+      { x: 0.0, y: 0.0, w: 1.0, h: 0.42, slant: 0 },
+      { x: 0.0, y: 0.42, w: 0.5, h: 0.58, slant: 0 },
+      { x: 0.5, y: 0.42, w: 0.5, h: 0.58, slant: 0 },
     ],
   },
-  'hero-right': {
-    label: 'Hero Right',
+  {
+    id: 'hero-top',
+    name: 'Hero Top',
     panels: [
-      { x: 0, y: 0, w: 0.45, h: 0.3333 },
-      { x: 0, y: 0.3333, w: 0.45, h: 0.3334 },
-      { x: 0, y: 0.6667, w: 0.45, h: 0.3333 },
-      { x: 0.45, y: 0, w: 0.55, h: 1 },
+      { x: 0.0, y: 0.0, w: 0.5, h: 0.58, slant: 0 },
+      { x: 0.5, y: 0.0, w: 0.5, h: 0.58, slant: 0 },
+      { x: 0.0, y: 0.58, w: 1.0, h: 0.42, slant: 0 },
     ],
   },
-  single: {
-    label: 'Single',
-    panels: [{ x: 0, y: 0, w: 1, h: 1 }],
-  },
-  quad: {
-    label: 'Quad',
+  {
+    id: 'diagonal',
+    name: 'Diagonal',
     panels: [
-      { x: 0, y: 0, w: 0.5, h: 0.5 },
-      { x: 0.5, y: 0, w: 0.5, h: 0.5 },
-      { x: 0, y: 0.5, w: 0.5, h: 0.5 },
-      { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+      { x: 0.0, y: 0.0, w: 1.0, h: 0.34, slant: 0.09 },
+      { x: 0.0, y: 0.34, w: 1.0, h: 0.33, slant: -0.09 },
+      { x: 0.0, y: 0.67, w: 1.0, h: 0.33, slant: 0.09 },
     ],
   },
-  'strip-5': {
-    label: 'Strip 5',
+  {
+    id: 'magazine',
+    name: 'Magazine',
     panels: [
-      { x: 0, y: 0, w: 0.3333, h: 0.55 },
-      { x: 0.3333, y: 0, w: 0.3334, h: 0.55 },
-      { x: 0.6667, y: 0, w: 0.3333, h: 0.55 },
-      { x: 0, y: 0.55, w: 0.5, h: 0.45 },
-      { x: 0.5, y: 0.55, w: 0.5, h: 0.45 },
+      { x: 0.22, y: 0.0, w: 0.56, h: 0.66, slant: 0 },
+      { x: 0.0, y: 0.0, w: 0.22, h: 0.33, slant: 0 },
+      { x: 0.78, y: 0.0, w: 0.22, h: 0.33, slant: 0 },
+      { x: 0.0, y: 0.33, w: 0.22, h: 0.33, slant: 0 },
+      { x: 0.78, y: 0.33, w: 0.22, h: 0.33, slant: 0 },
+      { x: 0.0, y: 0.66, w: 0.5, h: 0.34, slant: 0 },
+      { x: 0.5, y: 0.66, w: 0.5, h: 0.34, slant: 0 },
     ],
   },
-  poster: {
-    label: 'Poster',
+  {
+    id: 'wide-banner',
+    name: 'Wide Banner',
     panels: [
-      { x: 0.28, y: 0, w: 0.44, h: 0.64 },
-      { x: 0, y: 0, w: 0.28, h: 0.64 },
-      { x: 0.72, y: 0, w: 0.28, h: 0.64 },
-      { x: 0, y: 0.64, w: 0.5, h: 0.36 },
-      { x: 0.5, y: 0.64, w: 0.5, h: 0.36 },
+      { x: 0.0, y: 0.0, w: 1.0, h: 0.55, slant: 0 },
+      { x: 0.0, y: 0.55, w: 0.34, h: 0.45, slant: 0 },
+      { x: 0.34, y: 0.55, w: 0.33, h: 0.45, slant: 0 },
+      { x: 0.67, y: 0.55, w: 0.33, h: 0.45, slant: 0 },
     ],
   },
-};
+  {
+    id: 'portrait-stack',
+    name: 'Portrait Stack',
+    panels: [
+      { x: 0.0, y: 0.0, w: 0.36, h: 0.5, slant: 0 },
+      { x: 0.0, y: 0.5, w: 0.36, h: 0.5, slant: 0 },
+      { x: 0.36, y: 0.0, w: 0.64, h: 1.0, slant: 0 },
+    ],
+  },
+];
 
-// The panel rectangles of a layout, in pixels, inside a photo area of
-// width pw and height ph. A slanted panel keeps its bounding rect; the
-// slant only shapes the clip path the renderer builds from the same data.
-function layoutPanels(name, pw, ph) {
-  const def = LAYOUTS[name] || LAYOUTS['key-art'];
-  return def.panels.map((p) => ({
-    x: p.x * pw,
-    y: p.y * ph,
-    w: p.w * pw,
-    h: p.h * ph,
-    slant: (p.slant || 0) * p.w * pw,
-  }));
+export function layoutById(id) {
+  return LAYOUTS.find((layout) => layout.id === id) || LAYOUTS[0];
 }
 
-// The polygon of a panel (a parallelogram when slanted, a rect otherwise),
-// as [x, y] points in photo-area pixels, clockwise from the top-left.
-function panelPolygon(panel) {
-  const s = panel.slant || 0;
-  return [
-    [panel.x + s, panel.y],
-    [panel.x + panel.w + s, panel.y],
-    [panel.x + panel.w, panel.y + panel.h],
-    [panel.x, panel.y + panel.h],
-  ];
+// The most panels any layout holds; the editor keeps one slot per panel.
+export const MAX_PANELS = Math.max(...LAYOUTS.map((l) => l.panels.length));
+
+// Pixel rectangle of a panel on a W x H canvas, with a small bleed so
+// slanted neighbours never show a hairline gap between them.
+export function panelRect(panel, W, H) {
+  const bleed = 2;
+  return {
+    x: panel.x * W - bleed,
+    y: panel.y * H - bleed,
+    w: panel.w * W + bleed * 2,
+    h: panel.h * H + bleed * 2,
+    slant: panel.slant,
+  };
+}
+
+// The clip polygon of a panel: a parallelogram whose top edge is sheared
+// by slant * height. With slant 0 it is the plain rectangle.
+export function panelPath(ctx, rect) {
+  const shift = rect.slant * rect.h;
+  ctx.beginPath();
+  ctx.moveTo(rect.x + shift, rect.y);
+  ctx.lineTo(rect.x + rect.w + shift, rect.y);
+  ctx.lineTo(rect.x + rect.w, rect.y + rect.h);
+  ctx.lineTo(rect.x, rect.y + rect.h);
+  ctx.closePath();
 }

@@ -2,51 +2,39 @@
 [![rank](https://make.fun/badge/gta6-cover-art-01/dekakz/gta6-cover-art-01-kuzu-deka/rank.svg)](https://make.fun/bounty/gta6-cover-art-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 [![reward](https://make.fun/badge/gta6-cover-art-01/dekakz/gta6-cover-art-01-kuzu-deka/reward.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 
-# Solmar Bay Cover Studio v3
+# Solmar Bay — Cover Studio
 
-A static web app that turns your own photos into GTA-style multi-panel
-cover art: giant striped key-art lettering over the photos, per-panel role
-tags and story captions, a press-quote chip, WANTED / VOL. / seal stickers,
-and one-click PNG export in 1080x1080, 1080x1350 and 1920x1080.
+A GTA 6-style cover art maker that runs entirely offline in desktop Chrome. Pick one of four one-click presets (Sunset Chase, Neon Vice, Coral Heat, Palm Noir), or build your own: 10 multi-panel layouts, 8 sunset/neon colour grades, 12 AI-generated sample photos plus your own uploads, per-panel crop/zoom/pan, editable role tags and story captions, a giant striped sunset title with 3D depth, a script tagline, a press-quote chip, WANTED pill, VOL chip, gold seal, barcode and credit strip — and one-click PNG export in all three post sizes (1080 × 1080, 1080 × 1350, 1920 × 1080).
+
+Everything is original: no Rockstar Games logo, artwork, or font. The fonts (Anton, Bebas Neue, Pacifico, Oswald) ship under the SIL Open Font License, and the sample photos were made with an image model. Photos you load never leave your machine.
 
 ## Run it
 
-```
+```sh
 node serve.ts
+# open http://localhost:8080
 ```
 
-Then open `http://localhost:8080` in desktop Chrome. Everything is local:
-no network requests, no build step, no uploads — photos are read on your
-own machine.
+## How it works
 
-## Use it
+1. Pick a preset, a layout, and a grade.
+2. Click a panel to edit it: choose a photo (or upload your own), set its role tag and caption, crop with zoom and pan.
+3. Edit the title, tagline, and press quote — the chips dodge the title, the WANTED pill, and each other, so nothing ever overlaps.
+4. Export one PNG, or all three sizes at once.
 
-1. Click **Load the 12 sample photos** (or drop in your own photos).
-2. Pick a preset (Sunset Chase, Neon Vice, Coral Heat, Palm Noir), a layout
-   (10) and a colour grade (8).
-3. Edit the title, tagline, quote, and each panel's role, place, time and
-   flavour; drag the zoom / pan sliders to crop each photo.
-4. Click **Export all 3 sizes** — three PNGs download at once.
+## Layout
 
-## What is inside
-
-- `app/index.html` — the editor page (preview canvas + controls).
-- `app/style.css` — layout, fonts, controls.
-- `app/src/layouts.js` — 10 panel layouts (key-art default).
-- `app/src/grades.js` — 8 colour grades with striped title bands.
-- `app/src/photos.js` — the 12 sample photos, cover-fit crop/pan.
-- `app/src/lettering.js` — striped 3D title, script tagline, quote chip.
-- `app/src/stickers.js` — WANTED pill, VOL. chip, gold seal, barcode.
-- `app/src/cover.js` — the full canvas renderer.
-- `app/src/export.js` — PNG export in the three post sizes.
-- `app/src/editor.js` — state, presets, and all editor controls.
-- `app/src/shots.js` — screenshot presets (`?shot=cover|editor|portrait|square`).
-- `app/src/main.js` — boot.
+- `main.ts` — entrypoint: copies `app/` and `screenshots/` to `/output` and writes `dossier.json`.
+- `app/index.html`, `app/style.css` — editor shell and styling.
+- `app/src/layouts.js` — 10 panel layouts (Key Art, Duo Split, Triple Strip, Quad Grid, Hero Bottom, Hero Top, Diagonal, Magazine, Wide Banner, Portrait Stack).
+- `app/src/grades.js` — 8 colour grades with title-band palettes.
+- `app/src/photos.js` — 12 sample photos, cover-fit crop/pan.
+- `app/src/lettering.js` — striped/gradient 3D title, script tagline, press-quote chip.
+- `app/src/stickers.js` — WANTED pill, VOL chip, gold seal, barcode, bottom strip, palms.
+- `app/src/cover.js` — full renderer with dodge-aware chip placement.
+- `app/src/export.js` — PNG export in 1080 × 1080, 1080 × 1350, 1920 × 1080.
+- `app/src/editor.js` — state, 4 presets, control wiring.
+- `app/src/shots.js`, `app/src/main.js` — screenshot presets and boot.
 - `app/fonts/` — Anton, Bebas Neue, Pacifico, Oswald (SIL OFL).
-- `app/samples/` — 12 original photos made with an image model.
-- `main.ts` — hands the app in (copies app/ + screenshots/, writes dossier.json).
-
-## Originality
-
-All lettering, captions, quotes and photos are original. No Rockstar Games
-logo, artwork, character or font is used anywhere.
+- `app/samples/` — 12 AI-generated photos.
+- `screenshots/` — the cover and the editor at work.

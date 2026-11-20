@@ -1,219 +1,198 @@
-// Key-art lettering: the giant title, the script tagline, the press-quote
-// chip and the location label. The title is drawn on its own offscreen
-// canvas — a dark offset copy for the 3D extrusion, a thick black stroke,
-// then a fill of horizontal sunset bands (or a smooth gradient) — and the
-// finished block is stamped onto the cover, so the band alignment never
-// depends on where the title sits on the page.
-'use strict';
+// lettering.js — the giant striped title, the script tagline and the
+// press-quote chip. All lettering is drawn on canvas so the exported PNG
+// looks exactly like the preview.
 
-// Fits a font size so `text` fits `maxWidth`: starts at `start` and shrinks
-// until it fits or hits the floor. Returns the size in pixels.
-function fitFontSize(ctx, text, maxWidth, start, family, weight) {
-  let size = start;
-  const floor = Math.max(8, start * 0.28);
-  ctx.font = `${weight || 400} ${size}px ${family}`;
-  while (size > floor && ctx.measureText(text).width > maxWidth) {
-    size -= 1;
-    ctx.font = `${weight || 400} ${size}px ${family}`;
-  }
-  return size;
-}
+import { gradeGradient, gradeStripePattern } from './grades.js';
 
-// Splits a title into one or two lines: a single line when it fits at a
-// readable size, otherwise the split at the space nearest the middle.
-function splitTitle(title) {
-  const words = String(title || '').trim().split(/\s+/);
-  if (words.length <= 1) return [String(title || '').trim()];
+const TITLE_FONT = 'Anton, "Arial Black", sans-serif';
+const TAGLINE_FONT = 'Pacifico, cursive';
+const CHIP_FONT = 'Oswald, sans-serif';
+const LABEL_FONT = '"Bebas Neue", "Arial Narrow", sans-serif';
+
+// Split a title into one or two balanced lines that fit maxW at size px.
+export function fitTitleLines(ctx, text, maxW, px) {
+  const words = String(text || 'SOLMAR BAY').trim().split(/\s+/);
+  ctx.font = `400 ${px}px ${TITLE_FONT}`;
+  const single = words.join(' ');
+  if (ctx.measureText(single).width <= maxW || words.length === 1) return [single];
+  // Two lines: put the break where the two halves are closest in width.
   let best = 1;
   let bestDiff = Infinity;
   for (let i = 1; i < words.length; i++) {
-    const a = words.slice(0, i).join(' ').length;
-    const b = words.slice(i).join(' ').length;
-    const d = Math.abs(a - b);
-    if (d < bestDiff) { bestDiff = d; best = i; }
+    const a = ctx.measureText(words.slice(0, i).join(' ')).width;
+    const b = ctx.measureText(words.slice(i).join(' ')).width;
+    const diff = Math.abs(a - b);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = i;
+    }
   }
   return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
 }
 
-// A canvas pattern of horizontal bands in the grade's colours, one band
-// set per `height` pixels, so a title filled with it gets the striped
-// sunset look the best posters share.
-function stripePattern(ctx, grade, height) {
-  const g = GRADES[grade] || GRADES.sunset;
-  const band = document.createElement('canvas');
-  band.width = 8;
-  band.height = Math.max(8, Math.round(height));
-  const b = band.getContext('2d');
-  const n = g.bands.length;
-  for (let i = 0; i < n; i++) {
-    b.fillStyle = g.bands[i];
-    b.fillRect(0, (i * band.height) / n, band.width, band.height / n + 1);
+// The largest title size (px) whose lines fit maxW, starting from startPx.
+export function fitTitleSize(ctx, text, maxW, startPx) {
+  let px = startPx;
+  while (px > 24) {
+    const lines = fitTitleLines(ctx, text, maxW, px);
+    ctx.font = `400 ${px}px ${TITLE_FONT}`;
+    const widest = Math.max(...lines.map((line) => ctx.measureText(line).width));
+    if (widest <= maxW) return { px, lines };
+    px -= 4;
   }
-  return ctx.createPattern(band, 'repeat');
+  return { px, lines: fitTitleLines(ctx, text, maxW, px) };
 }
 
-// A smooth vertical gradient through the grade's band colours.
-function bandGradient(ctx, grade, top, height) {
-  const g = GRADES[grade] || GRADES.sunset;
-  const grad = ctx.createLinearGradient(0, top, 0, top + height);
-  g.bands.forEach((c, i) => grad.addColorStop(i / (g.bands.length - 1), c));
-  return grad;
-}
+// Draw the title centred on cx, its top at y. Returns the title's rect.
+// style is 'stripes' (sunset bands) or 'gradient' (smooth blend). A purple
+// offset copy behind it gives the 3D depth, and a thick black outline
+// keeps the letters readable over any photo.
+export function drawTitle(ctx, { text, cx, y, maxW, startPx, style, grade }) {
+  const { px, lines } = fitTitleSize(ctx, text, maxW, startPx);
+  const lineH = px * 0.98;
+  const blockH = lines.length * lineH;
+  const outline = Math.max(3, px * 0.085);
+  const depth = Math.max(3, px * 0.055);
 
-// Draws the title block and returns its metrics {top, bottom, fontSize} in
-// cover pixels. `zone` is {x, y, w, h} in cover pixels; the title is
-// centred in it. Two lines at most; the font shrinks until the longest
-// line fits 94% of the cover width.
-function drawTitle(ctx, state, W, zone) {
-  const grade = GRADES[state.grade] || GRADES.sunset;
-  const title = (state.title || '').toUpperCase();
-  const maxW = W * 0.94;
-  const oneLine = fitFontSize(ctx, title, maxW, zone.h * 0.52, 'Anton', 400);
-  let lines = [title];
-  let fontSize = oneLine;
-  if (oneLine < zone.h * 0.30 && title.indexOf(' ') > 0) {
-    lines = splitTitle(title);
-    const longest = lines.reduce((a, b) => (a.length >= b.length ? a : b));
-    fontSize = fitFontSize(ctx, longest, maxW, zone.h * 0.44, 'Anton', 400);
+  let fill;
+  if (style === 'gradient') {
+    fill = gradeGradient(ctx, grade.bands, cx - maxW / 2, y, maxW, blockH);
+  } else {
+    fill = gradeStripePattern(ctx, grade.bands, blockH / grade.bands.length);
+    // Align the pattern so the first band starts exactly at the title's top.
+    if (fill && typeof fill.setTransform === 'function') {
+      fill.setTransform(new DOMMatrix().translate(0, y % blockH));
+    }
   }
-  const lineH = fontSize * 1.04;
-  const blockH = lineH * lines.length;
-  const top = zone.y + (zone.h - blockH) / 2;
 
-  // Offscreen block: offset copy, stroke, band fill, then one drawImage.
-  const off = document.createElement('canvas');
-  off.width = W;
-  off.height = Math.ceil(blockH + fontSize * 0.14);
-  const o = off.getContext('2d');
-  o.textAlign = 'center';
-  o.textBaseline = 'middle';
-  o.lineJoin = 'round';
-  const ox = fontSize * 0.045;
-  const oy = fontSize * 0.055;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.lineJoin = 'round';
+  const lineRects = [];
   lines.forEach((line, i) => {
-    const cy = lineH * (i + 0.5) + fontSize * 0.03;
-    o.font = `400 ${fontSize}px Anton`;
-    // 3D extrusion: the same letters, shifted down-right in deep purple.
-    o.fillStyle = grade.offset;
-    o.fillText(line, W / 2 + ox, cy + oy);
-    // Thick black outline.
-    o.strokeStyle = '#0d0208';
-    o.lineWidth = Math.max(3, fontSize * 0.16);
-    o.strokeText(line, W / 2, cy);
-    // Band fill (stripes) or smooth gradient, by the title style.
-    o.fillStyle = state.titleStyle === 'gradient'
-      ? bandGradient(o, state.grade, cy - fontSize / 2, fontSize)
-      : stripePattern(o, state.grade, fontSize);
-    o.fillText(line, W / 2, cy);
+    const ly = y + i * lineH;
+    const lw = ctx.measureText(line).width;
+    lineRects.push({ x: cx - lw / 2, y: ly, w: lw, h: lineH });
+    // 3D offset copy, purple.
+    ctx.font = `400 ${px}px ${TITLE_FONT}`;
+    ctx.fillStyle = '#4b1d7a';
+    ctx.fillText(line, cx + depth, ly + depth);
+    // Black outline, then the striped / gradient fill.
+    ctx.lineWidth = outline;
+    ctx.strokeStyle = '#0d0a14';
+    ctx.strokeText(line, cx, ly);
+    ctx.fillStyle = fill;
+    ctx.fillText(line, cx, ly);
   });
-  // Two white sparkles at the title's ends, for the printed-poster glint.
-  drawSparkle(o, W * 0.045, top - zone.y + fontSize * 0.32, fontSize * 0.10);
-  drawSparkle(o, W * 0.955, top - zone.y + blockH - fontSize * 0.30, fontSize * 0.08);
-  ctx.drawImage(off, 0, top - fontSize * 0.03);
-  return { top, bottom: top + blockH, fontSize, lines };
-}
-
-// A four-point star sparkle at (x, y) with radius r.
-function drawSparkle(ctx, x, y, r) {
-  ctx.save();
-  ctx.fillStyle = 'rgba(255,255,255,0.95)';
-  ctx.beginPath();
-  ctx.moveTo(x, y - r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.quadraticCurveTo(x, y, x, y + r);
-  ctx.quadraticCurveTo(x, y, x - r, y);
-  ctx.quadraticCurveTo(x, y, x, y - r);
-  ctx.fill();
   ctx.restore();
+  return { x: cx - maxW / 2, y, w: maxW, h: blockH, px, lines, lineRects };
 }
 
-// Draws the script tagline overlapping the title's bottom edge, tilted a
-// couple of degrees, in the grade's tagline colour with a dark outline.
-function drawTagline(ctx, state, W, titleBottom, fontSize) {
-  const grade = GRADES[state.grade] || GRADES.sunset;
-  const tag = state.tagline || '';
-  if (!tag) return titleBottom;
-  const size = Math.max(14, fontSize * 0.34);
+// The script tagline under the title, slightly tilted, white with a dark
+// outline. Returns its rect.
+export function drawTagline(ctx, { text, cx, y, maxW }) {
+  const clean = String(text || '').trim();
+  if (!clean) return null;
+  let px = Math.round(maxW * 0.052);
+  ctx.font = `400 ${px}px ${TAGLINE_FONT}`;
+  while (px > 14 && ctx.measureText(clean).width > maxW) {
+    px -= 2;
+    ctx.font = `400 ${px}px ${TAGLINE_FONT}`;
+  }
+  const w = ctx.measureText(clean).width;
+  const h = px * 1.4;
   ctx.save();
-  ctx.translate(W / 2, titleBottom - size * 0.08);
-  ctx.rotate(-0.035);
-  ctx.font = `400 ${size}px Pacifico`;
+  ctx.translate(cx, y + h / 2);
+  ctx.rotate(-0.03);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(20,0,20,0.85)';
-  ctx.lineWidth = Math.max(2, size * 0.10);
-  ctx.strokeText(tag, 0, 0);
-  ctx.fillStyle = grade.tagline;
-  ctx.fillText(tag, 0, 0);
+  ctx.lineWidth = Math.max(2, px * 0.12);
+  ctx.strokeStyle = 'rgba(13, 10, 20, 0.9)';
+  ctx.strokeText(clean, 0, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(clean, 0, 0);
   ctx.restore();
-  return titleBottom + size * 0.72;
+  return { x: cx - w / 2, y, w, h };
 }
 
-// Draws the press-quote chip centred above the title: gold stars, the
-// quote in condensed caps, and its source. Returns the chip's top edge.
-function drawQuoteChip(ctx, state, W, titleTop) {
-  const stars = '★'.repeat(Math.max(1, Math.min(5, state.quoteStars || 5)));
-  const quote = (state.quote || '').toUpperCase();
-  const source = (state.source || '').toUpperCase();
-  const size = Math.max(12, W * 0.017);
-  ctx.font = `600 ${size}px Oswald`;
-  const textW = ctx.measureText(` ${quote}  —  ${source}`).width;
-  ctx.font = `${size}px Oswald`;
-  const starsW = ctx.measureText(stars).width;
-  const pad = size * 0.9;
-  const chipW = Math.min(W * 0.92, starsW + textW + pad * 2 + size * 0.4);
-  const chipH = size * 2.1;
-  const x = (W - chipW) / 2;
-  const y = titleTop - chipH - size * 0.55;
-  roundRect(ctx, x, y, chipW, chipH, chipH / 2);
-  ctx.fillStyle = 'rgba(10,4,18,0.88)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,209,102,0.55)';
-  ctx.lineWidth = Math.max(1, W * 0.001);
-  ctx.stroke();
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
-  let cx = x + pad;
-  ctx.font = `${size}px Oswald`;
-  ctx.fillStyle = '#ffd166';
-  ctx.fillText(stars, cx, y + chipH / 2);
-  cx += starsW + size * 0.4;
-  ctx.font = `600 ${size}px Oswald`;
-  ctx.fillStyle = '#fff7d6';
-  ctx.fillText(quote, cx, y + chipH / 2);
-  cx += ctx.measureText(quote).width + size * 0.5;
-  ctx.font = `400 ${size * 0.85}px Oswald`;
-  ctx.fillStyle = '#ffd166';
-  ctx.fillText(`— ${source}`, cx, y + chipH / 2);
-  return y;
-}
+// The press-quote chip: five gold stars, the quote, and its source.
+// maxW caps the chip; the quote wraps to at most two lines. Returns the
+// chip's rect, or null when there is no quote text.
+export function drawQuoteChip(ctx, { quote, source, cx, y, maxW, k }) {
+  const text = String(quote || '').trim();
+  if (!text) return null;
+  const padX = 16 * k;
+  const padY = 9 * k;
+  const starPx = Math.round(15 * k);
+  const quotePx = Math.round(17 * k);
+  const sourcePx = Math.round(13 * k);
+  const innerW = maxW - padX * 2;
 
-// Draws the location label in tracked-out caps above the quote chip.
-function drawLocationLabel(ctx, state, W, quoteTop) {
-  const label = (state.location || '').toUpperCase();
-  if (!label) return;
-  const size = Math.max(11, W * 0.015);
+  ctx.font = `600 ${quotePx}px ${CHIP_FONT}`;
+  const words = text.split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const trial = line ? `${line} ${word}` : word;
+    if (ctx.measureText(trial).width <= innerW || !line) {
+      line = trial;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+    if (lines.length === 2) break;
+  }
+  if (line) lines.push(line);
+  if (lines.length > 2) {
+    lines.length = 2;
+    lines[1] = `${lines[1].replace(/\s+\S*$/, '')}…`;
+  }
+  const textW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+  const src = String(source || '').trim();
+  ctx.font = `400 ${sourcePx}px ${LABEL_FONT}`;
+  const srcW = src ? ctx.measureText(`— ${src}`).width : 0;
+  const w = Math.min(maxW, Math.max(textW, srcW) + padX * 2);
+  const h = padY * 2 + starPx + 4 * k + lines.length * quotePx * 1.25 + (src ? sourcePx * 1.5 : 0);
+
+  const x = cx - w / 2;
   ctx.save();
-  ctx.font = `600 ${size}px Oswald`;
+  ctx.fillStyle = 'rgba(13, 10, 20, 0.88)';
+  roundRect(ctx, x, y, w, h, 8 * k);
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, 1.5 * k);
+  ctx.strokeStyle = 'rgba(245, 185, 13, 0.85)';
+  ctx.stroke();
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  try { ctx.letterSpacing = `${size * 0.42}px`; } catch (e) { /* older canvas */ }
-  ctx.fillStyle = '#fff7d6';
-  ctx.shadowColor = 'rgba(0,0,0,0.7)';
-  ctx.shadowBlur = size * 0.4;
-  ctx.fillText(label, W / 2, quoteTop - size * 1.05);
+  ctx.textBaseline = 'top';
+  // Stars.
+  ctx.fillStyle = '#f5b90d';
+  ctx.font = `${starPx}px sans-serif`;
+  ctx.fillText('★★★★★', cx, y + padY);
+  // Quote lines.
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `600 ${quotePx}px ${CHIP_FONT}`;
+  lines.forEach((l, i) => {
+    ctx.fillText(`“${l}”`, cx, y + padY + starPx + 4 * k + i * quotePx * 1.25);
+  });
+  // Source.
+  if (src) {
+    ctx.fillStyle = '#f5b90d';
+    ctx.font = `400 ${sourcePx}px ${LABEL_FONT}`;
+    ctx.fillText(`— ${src}`, cx, y + padY + starPx + 4 * k + lines.length * quotePx * 1.25 + 2 * k);
+  }
   ctx.restore();
+  return { x, y, w, h };
 }
 
-// A rounded-rectangle path (fill/stroke left to the caller).
-function roundRect(ctx, x, y, w, h, r) {
-  const rad = Math.min(r, w / 2, h / 2);
+export function roundRect(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
-  ctx.moveTo(x + rad, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rad);
-  ctx.arcTo(x + w, y + h, x, y + h, rad);
-  ctx.arcTo(x, y + h, x, y, rad);
-  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
   ctx.closePath();
 }
