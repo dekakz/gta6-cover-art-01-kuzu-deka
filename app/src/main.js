@@ -1,49 +1,41 @@
-// Solmar Bay Cover Studio (v2, key art): loads the bundled fonts, starts
-// the editor, and hands a `?shot=` query to shots.js for deterministic
-// screenshots. The default cover is the 6-panel Key Art layout with the
-// giant title overlapping the photo seam, per-panel caption chips, a press
-// quote, WANTED / VOL. stickers and a thin palm bottom strip.
-import { createEditor } from './editor.js';
-import { runShot } from './shots.js';
+// Boot: builds the editor, applies a screenshot preset when ?shot= is
+// present, preloads the sample photos and the bundled fonts, then renders.
+// Exposes window.SolmarBay for the screenshot driver and for debugging:
+// { state, render, exportPNG, exportAll }.
+'use strict';
 
-/** Loads the bundled OFL fonts so the canvas can paint with them. */
-export async function loadFonts() {
-  const faces = [
-    ['Anton', 'fonts/Anton-Regular.woff2', 400],
-    ['Oswald', 'fonts/Oswald.woff2', 600],
-    ['Pacifico', 'fonts/Pacifico-Regular.woff2', 400],
-    ['Bebas Neue', 'fonts/BebasNeue-Regular.woff2', 400],
-  ];
-  for (const [family, url, weight] of faces) {
-    try {
-      const face = new FontFace(family, `url(${url})`, { weight: String(weight) });
-      const loaded = await face.load();
-      document.fonts.add(loaded);
-    } catch (e) {
-      // The canvas falls back to system fonts; the cover still draws.
-    }
+function boot() {
+  // Default panels come from the Sunset Chase preset.
+  applyPreset('sunset-chase');
+  bindEditor();
+
+  const shot = getShot();
+  if (shot) {
+    state.size = shot.size;
+    applyPreset(shot.preset);
+    document.body.classList.add(shot.mode === 'cover' ? 'shot-cover' : 'shot-editor');
   }
-  try {
-    await Promise.race([
-      document.fonts.ready,
-      new Promise((r) => setTimeout(r, 1500)),
-    ]);
-  } catch { /* fonts are best-effort */ }
+  syncInputs();
+
+  // Render once right away (photos paint in as they load), then again
+  // once the fonts and the samples are ready.
+  render();
+  const ready = Promise.all([
+    waitForCoverFonts(),
+    preloadSamples(),
+  ]);
+  ready.then(() => {
+    render();
+    document.body.setAttribute('data-ready', 'true');
+    window.SolmarBayReady = true;
+  });
+
+  window.SolmarBay = {
+    state,
+    render,
+    exportPNG: (size) => exportPNG(state, size || state.size),
+    exportAll: () => exportAll(state, document.getElementById('exportNote')),
+  };
 }
 
-const canvas = document.getElementById('cover');
-const editor = createEditor(canvas);
-window.__editor = editor;
-
-const query = new URLSearchParams(location.search);
-const shot = query.get('shot');
-if (shot) {
-  await loadFonts();
-  await runShot(shot, query, editor);
-} else {
-  loadFonts().then(() => editor.redraw());
-  // Load the sample photos so the first paint already shows the studio:
-  // the six new key-art photos fill the six Key Art panels first, then
-  // the six v1 photos are available for the other layouts.
-  editor.loadSamples(['hero-convertible', 'man-face', 'sports-car', 'gas-station', 'motorcycle', 'aerial-coast', 'street', 'boulevard', 'neon', 'marina', 'lifeguard', 'pier']);
-}
+boot();

@@ -1,34 +1,48 @@
-[![make.fun — Make GTA 6 Cover Art](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/c/gta6-cover-art-01)
-[![rank](https://make.fun/badge/gta6-cover-art-01/dekakz/gta6-cover-art-01-kuzu-deka/rank.svg)](https://make.fun/c/gta6-cover-art-01)
-[![reward](https://make.fun/badge/gta6-cover-art-01/dekakz/gta6-cover-art-01-kuzu-deka/reward.svg)](https://make.fun/c/gta6-cover-art-01)
+# Solmar Bay Cover Studio v3
 
-# Solmar Bay Cover Studio
-
-A GTA-style cover art maker for make.fun's **Make GTA 6 Cover Art** bounty. Turn your own photos into a multi-panel sunset-city poster — a giant gradient title overlapping the photos, script tagline, press quote, per-panel story captions and authentic stickers — and export it in all three post sizes at once.
-
-**v2 (Key Art)** — rebuilt after v1's dev 0.733460 (rank 578): the flat title band is gone. Photos fill the full canvas, the giant title straddles the photo seam with a purple 3D offset, and a thin palm-silhouette strip carries the bar text, credit line and barcode underneath.
-
-- **10 layouts** — Key Art (6-panel collage, the default), Hero 5, Grid 9, Split 4, Tilt diagonals, Full Bleed, Duo, Triptych, Magazine, Skyline Band
-- **8 colour grades** — Sunset, Neon Vice, Coral Heat, Palm Dusk, Midnight, Golden Hour, Halftone, Noir (canvas duotone/tint overlays, vignette, grain); each grade also colours the thin bottom strip
-- **Lettering** — auto-fitting condensed title with gradient fill, black outline and purple 3D extrusion (Anton), Pacifico script tagline overlapping the title's bottom edge, Oswald location label, press-quote chip with gold stars; optional halftone-dot title effect
-- **Panel captions** — every panel gets its own black story chip: PLACE + time + flavor line, editable per panel
-- **Stickers** — EST. 2026 starburst on the panel seam, NEW badge, diagonal ribbon (measured so it can never clip), COLLECTORS EDITION pill, WANTED ★★★★★ pill, VOL. chip, 1–5 star rating wired into the quote line
-- **Photos** — file upload (multiple), drag-and-drop, 12 bundled original sample photos (6 new key-art photos + 6 v1 photos); per-panel photo assignment, per-panel crop/zoom/pan (drag on the canvas or sliders, pan can never expose an empty edge); one photo across all panels or a different photo per panel
-- **Export** — one click exports all three sizes at once as PNGs: 1080×1080, 1080×1350, 1920×1080, plus individual size buttons; exports wait for the bundled fonts so lettering never falls back
-- **One-click posters** — 4 preset combos (Sunset Chase, Neon Vice, Coral Heat, Halftone Noir), each with its own quote and captions
+A static web app that turns your own photos into GTA-style multi-panel
+cover art: giant striped key-art lettering over the photos, per-panel role
+tags and story captions, a press-quote chip, WANTED / VOL. / seal stickers,
+and one-click PNG export in 1080x1080, 1080x1350 and 1920x1080.
 
 ## Run it
 
-```sh
+```
 node serve.ts
-# open http://localhost:8080
 ```
 
-No build step, no network at runtime: every script, font and image is a file under `app/`. Fonts are SIL OFL (Anton, Oswald, Bebas Neue, Pacifico — see `app/fonts/OFL.txt`). Sample photos are original AI-made images; no Rockstar logos, artwork, characters or fonts are used anywhere.
+Then open `http://localhost:8080` in desktop Chrome. Everything is local:
+no network requests, no build step, no uploads — photos are read on your
+own machine.
 
-## Screenshots
+## Use it
 
-1. `screenshots/1-cover.jpg` — exported 1920×1080 landscape cover (Key Art, Sunset grade)
-2. `screenshots/2-editor.jpg` — the editor in a browser with photos loaded
-3. `screenshots/3-cover.jpg` — exported 1080×1350 portrait cover (Key Art, Neon Vice grade)
-4. `screenshots/4-cover-square.jpg` — exported 1080×1080 square cover (Key Art, Coral Heat grade)
+1. Click **Load the 12 sample photos** (or drop in your own photos).
+2. Pick a preset (Sunset Chase, Neon Vice, Coral Heat, Palm Noir), a layout
+   (10) and a colour grade (8).
+3. Edit the title, tagline, quote, and each panel's role, place, time and
+   flavour; drag the zoom / pan sliders to crop each photo.
+4. Click **Export all 3 sizes** — three PNGs download at once.
+
+## What is inside
+
+- `app/index.html` — the editor page (preview canvas + controls).
+- `app/style.css` — layout, fonts, controls.
+- `app/src/layouts.js` — 10 panel layouts (key-art default).
+- `app/src/grades.js` — 8 colour grades with striped title bands.
+- `app/src/photos.js` — the 12 sample photos, cover-fit crop/pan.
+- `app/src/lettering.js` — striped 3D title, script tagline, quote chip.
+- `app/src/stickers.js` — WANTED pill, VOL. chip, gold seal, barcode.
+- `app/src/cover.js` — the full canvas renderer.
+- `app/src/export.js` — PNG export in the three post sizes.
+- `app/src/editor.js` — state, presets, and all editor controls.
+- `app/src/shots.js` — screenshot presets (`?shot=cover|editor|portrait|square`).
+- `app/src/main.js` — boot.
+- `app/fonts/` — Anton, Bebas Neue, Pacifico, Oswald (SIL OFL).
+- `app/samples/` — 12 original photos made with an image model.
+- `main.ts` — hands the app in (copies app/ + screenshots/, writes dossier.json).
+
+## Originality
+
+All lettering, captions, quotes and photos are original. No Rockstar Games
+logo, artwork, character or font is used anywhere.

@@ -1,71 +1,60 @@
-// Export for Solmar Bay Cover Studio (v2): renders the cover at the three
-// common post sizes and downloads them as PNGs, one click for all three
-// or one button per size. Rendering reuses drawCover on an offscreen
-// canvas, so an export is exactly what the live preview shows. Exports
-// wait for the bundled fonts first, so the PNG lettering never falls back
-// to a system font.
+// PNG export: renders the cover offscreen at the exact post size and
+// downloads it. The export waits for the bundled fonts first, so an
+// export can never fall back to a system font.
+'use strict';
 
-import { drawCover } from './cover.js';
+const EXPORT_SIZES = {
+  '1920x1080': [1920, 1080],
+  '1080x1080': [1080, 1080],
+  '1080x1350': [1080, 1350],
+};
 
-/** The three post sizes: square, portrait, landscape. */
-export const EXPORT_SIZES = [
-  { id: 'square', label: 'Square 1080 x 1080', w: 1080, h: 1080, file: 'solmar-bay-cover-1080x1080.png' },
-  { id: 'portrait', label: 'Portrait 1080 x 1350', w: 1080, h: 1350, file: 'solmar-bay-cover-1080x1350.png' },
-  { id: 'landscape', label: 'Landscape 1920 x 1080', w: 1920, h: 1080, file: 'solmar-bay-cover-1920x1080.png' },
-];
-
-/** Renders the cover at `size` and resolves to a PNG Blob. */
-export async function renderCoverBlob(state, size) {
-  // Wait briefly for the bundled fonts so an export never falls back to a
-  // system font mid-render; the cover is deterministic either way.
-  try {
-    await Promise.race([
-      document.fonts.ready,
-      new Promise((r) => setTimeout(r, 1200)),
-    ]);
-  } catch { /* fonts are best-effort */ }
-  const canvas = document.createElement('canvas');
-  canvas.width = size.w;
-  canvas.height = size.h;
-  drawCover(canvas, { ...state, selectedPanel: null });
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG export failed'))), 'image/png');
-  });
+// Waits until the four bundled fonts are usable at the sizes the cover
+// needs (Anton for the title, Pacifico for the tagline, Oswald for chips,
+// Bebas Neue for the ribbon).
+function waitForCoverFonts() {
+  if (!document.fonts || !document.fonts.load) return Promise.resolve();
+  return Promise.all([
+    document.fonts.load('400 100px Anton'),
+    document.fonts.load('400 40px Pacifico'),
+    document.fonts.load('600 20px Oswald'),
+    document.fonts.load('400 20px "Bebas Neue"'),
+    document.fonts.ready,
+  ]).catch(() => undefined);
 }
 
-/** Downloads a Blob as a file. */
-export function downloadBlob(blob, filename) {
+// Renders one PNG of the cover at `sizeKey` and downloads it as
+// solmar-bay-cover-<size>.png. Returns a promise for the blob.
+async function exportPNG(state, sizeKey) {
+  await waitForCoverFonts();
+  const dims = EXPORT_SIZES[sizeKey];
+  if (!dims) throw new Error(`unknown size ${sizeKey}`);
+  const [w, h] = dims;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  renderCover(canvas.getContext('2d'), state, w, h);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
+  a.href = url;
+  a.download = `solmar-bay-cover-${sizeKey}.png`;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return blob;
 }
 
-/** Exports one size. Resolves to the filename. */
-export async function exportOneSize(state, sizeId) {
-  const size = EXPORT_SIZES.find((s) => s.id === sizeId) || EXPORT_SIZES[0];
-  const blob = await renderCoverBlob(state, size);
-  downloadBlob(blob, size.file);
-  return size.file;
-}
-
-/**
- * Exports all three sizes, one after another, calling `onProgress(done,
- * total, label)` after each. Resolves to the list of filenames.
- */
-export async function exportAllSizes(state, onProgress) {
-  const files = [];
-  for (let i = 0; i < EXPORT_SIZES.length; i++) {
-    const size = EXPORT_SIZES[i];
-    const blob = await renderCoverBlob(state, size);
-    downloadBlob(blob, size.file);
-    files.push(size.file);
-    if (onProgress) onProgress(i + 1, EXPORT_SIZES.length, size.label);
-    // Let the browser breathe between downloads so none is dropped.
-    await new Promise((r) => setTimeout(r, 250));
+// Exports all three post sizes, one after another, and reports progress
+// into #exportNote. A short pause between downloads keeps the browser
+// from dropping one.
+async function exportAll(state, noteEl) {
+  const keys = Object.keys(EXPORT_SIZES);
+  for (let i = 0; i < keys.length; i++) {
+    if (noteEl) noteEl.textContent = `Exporting ${i + 1} of ${keys.length}…`;
+    await exportPNG(state, keys[i]);
+    await new Promise((r) => setTimeout(r, 350));
   }
-  return files;
+  if (noteEl) noteEl.textContent = 'Done — 3 PNGs downloaded.';
 }

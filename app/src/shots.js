@@ -1,37 +1,24 @@
-// Fixed scenes for screenshots (v2): `?shot=cover` shows one exported
-// cover alone, `?shot=editor` shows the editor with photos loaded. Query
-// knobs: layout, grade, photo (comma list of sample ids), caption,
-// tagline, location, bar, preset, size (square|portrait|landscape).
-// window.__shotReady is set once the cover is painted.
-import { SAMPLE_PHOTOS } from './editor.js';
+// Screenshot presets: ?shot=cover|editor|portrait|square on the page URL
+// picks a preset and a size and (for the cover shots) hides the editor
+// chrome so the frame is the cover alone. The screenshot driver uses
+// these; a person opening the page normally never sees them.
+'use strict';
 
-export async function runShot(shot, query, editor) {
-  const { state } = editor;
-  if (shot === 'cover') document.body.classList.add('shot-cover');
+const SHOT_PRESETS = {
+  cover: { preset: 'sunset-chase', size: '1920x1080', mode: 'cover' },
+  editor: { preset: 'sunset-chase', size: '1920x1080', mode: 'editor' },
+  portrait: { preset: 'neon-vice', size: '1080x1350', mode: 'cover' },
+  square: { preset: 'coral-heat', size: '1080x1080', mode: 'cover' },
+};
 
-  const preset = query.get('preset');
-  if (preset) editor.applyPreset(preset);
-
-  if (query.get('layout')) state.layout = query.get('layout');
-  if (query.get('grade')) state.grade = query.get('grade');
-  if (query.get('caption')) state.title = query.get('caption');
-  if (query.get('tagline')) state.tagline = query.get('tagline');
-  if (query.get('location')) state.location = query.get('location');
-  if (query.get('bar')) state.barText = query.get('bar');
-  // A layout override after a preset changes the panel count, so re-sync
-  // assignments, crops and captions before the photos are dealt.
-  editor.syncPanels();
-
-  const size = query.get('size') || (shot === 'cover' ? 'landscape' : 'landscape');
-  editor.setPreviewSize(size);
-
-  const photoIds = (query.get('photo') || 'hero-convertible,man-face,sports-car,gas-station,motorcycle,aerial-coast')
-    .split(',').map((s) => s.trim()).filter(Boolean);
-  const known = photoIds.filter((id) => SAMPLE_PHOTOS.some((s) => s.id === id));
-  await editor.loadSamples(known.length ? known : ['hero-convertible', 'man-face', 'sports-car', 'gas-station', 'motorcycle', 'aerial-coast']);
-
-  // Hide the editor chrome for a pure cover shot, keep it for editor shots.
-  if (shot === 'cover') state.selectedPanel = null;
-  editor.redraw();
-  requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));
+// The shot named by ?shot=, or null for a normal visit.
+function getShot() {
+  let name = null;
+  try {
+    name = new URLSearchParams(window.location.search).get('shot');
+  } catch (e) {
+    name = null;
+  }
+  if (!name || !SHOT_PRESETS[name]) return null;
+  return { name, ...SHOT_PRESETS[name] };
 }

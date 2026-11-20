@@ -1,97 +1,75 @@
-// Photo handling for Solmar Bay Cover Studio: loading images, assigning
-// them to panels, and drawing each panel with its own crop (zoom + pan).
-// A crop is { zoom, ox, oy }: zoom 1 fills the panel edge to edge, larger
-// zooms in; ox/oy pan the photo inside the panel from -1 to 1. Crops are
-// per panel, so one photo can fill every panel with a different framing,
-// or every panel can hold a different photo.
+// Sample photos and the cover-fit crop that draws them into panels.
+// All twelve samples are original photos made with an image model for this
+// studio: fictional people, no real person, no game artwork. A photo is
+// drawn "cover" style — scaled to fill its panel, then panned — and the pan
+// can never expose an edge, because the drawn image always covers the rect.
+'use strict';
 
-/** Loads an image from a URL, resolving once it can be drawn. */
-export function loadImage(url) {
-  return new Promise((resolve, reject) => {
+// One entry per sample: the file, the role tag and the story caption the
+// panel shows by default. The strings are the studio's own.
+const SAMPLES = [
+  { src: 'samples/hero-driver.jpg', role: 'THE DRIVER', place: 'SOLMAR STRIP', time: '6:40 PM', flavor: 'TOP DOWN, NO PLANS' },
+  { src: 'samples/duo-convertible.jpg', role: 'THE GETAWAY', place: 'COAST ROAD 9', time: '7:15 PM', flavor: 'CHASING THE LIGHT' },
+  { src: 'samples/neon-arcade.jpg', role: 'THE LOOKOUT', place: 'NEON MILE', time: '11:58 PM', flavor: 'OUT PAST CURFEW' },
+  { src: 'samples/rider-night.jpg', role: 'THE WHEELMAN', place: 'DUSK RIDGE', time: '8:05 PM', flavor: 'ONE LAST RIDE' },
+  { src: 'samples/speedboat.jpg', role: 'THE PILOT', place: 'CORAL SHORE', time: '5:50 PM', flavor: 'THE WHOLE COAST' },
+  { src: 'samples/skyline-dusk.jpg', role: 'THE SPOTTER', place: 'SKYLINE ROOF', time: '9:10 PM', flavor: 'EYES ON THE CITY' },
+  { src: 'samples/gas-neon.jpg', role: 'THE FIXER', place: 'PALM FUEL', time: '1:20 AM', flavor: 'RAIN ON NEON' },
+  { src: 'samples/coast-aerial.jpg', role: 'THE RUNNER', place: 'CLIFF RUN', time: '7:02 PM', flavor: 'NO BRAKES DOWNHILL' },
+  { src: 'samples/marina-dawn.jpg', role: 'THE ANGLER', place: 'HARBOR LIGHTS', time: '6:05 AM', flavor: 'FIRST CAST' },
+  { src: 'samples/boulevard-palms.jpg', role: 'THE CAPTAIN', place: 'SUNSET ROW', time: '6:42 PM', flavor: 'GOLDEN HOUR RUN' },
+  { src: 'samples/diner-night.jpg', role: 'THE DEALER', place: 'THE DINER', time: '12:40 AM', flavor: 'COFFEE AND ALIBIS' },
+  { src: 'samples/beach-bonfire.jpg', role: 'THE GHOST', place: 'BOARDWALK', time: '7:30 PM', flavor: 'SPARKS AND SALT AIR' },
+];
+
+// The cache of loaded images, keyed by src. Uploads land here too, under
+// their object URL, so the renderer never cares where a photo came from.
+const imageCache = new Map();
+
+// The resolved <img> per src (null when a file failed to load). Filled in
+// when a load finishes; the renderer reads this, never the promises.
+const loadedImages = new Map();
+
+// Loads one image (from the cache when already loaded). Resolves with the
+// <img> element, or with null when the file cannot be read.
+function loadImage(src) {
+  const hit = imageCache.get(src);
+  if (hit) return hit;
+  const p = new Promise((resolve) => {
     const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Could not load ${url}`));
-    img.src = url;
+    img.onload = () => { loadedImages.set(src, img); resolve(img); };
+    img.onerror = () => { loadedImages.set(src, null); resolve(null); };
+    img.src = src;
   });
+  imageCache.set(src, p);
+  return p;
 }
 
-/** Preloads several images in order; resolves to the loaded images. */
-export async function preloadImages(urls) {
-  const out = [];
-  for (const url of urls) out.push(await loadImage(url));
-  return out;
+// Preloads every sample photo. The cover renders once they resolve, so a
+// first paint never shows an empty panel.
+function preloadSamples() {
+  return Promise.all(SAMPLES.map((s) => loadImage(s.src)));
 }
 
-/** Aspect ratio (width / height) of an image, 1 when unknown. */
-export function imageAspect(img) {
-  const w = img.naturalWidth || 1;
-  const h = img.naturalHeight || 1;
-  return w / h;
+// The natural aspect ratio of a loaded image (width / height), or 1.5
+// while it is still loading, so layout math never divides by zero.
+function imageAspect(img) {
+  if (!img || !img.naturalWidth) return 1.5;
+  return img.naturalWidth / img.naturalHeight;
 }
 
-/** Loads an image from a File the user picked or dropped. */
-export function loadImageFile(file) {
-  return loadImage(URL.createObjectURL(file));
-}
-
-/** A fresh crop: no zoom, centred. */
-export function defaultCrop() {
-  return { zoom: 1, ox: 0, oy: 0 };
-}
-
-/**
- * Builds the default per-panel photo assignment for `panelCount` panels
- * from `photoCount` photos. Mode 'one' fills every panel with photo 0;
- * mode 'each' cycles through the photos so every panel differs.
- */
-export function defaultAssignments(panelCount, photoCount, mode) {
-  const out = [];
-  for (let i = 0; i < panelCount; i++) {
-    out.push(mode === 'one' ? 0 : photoCount > 0 ? i % photoCount : 0);
-  }
-  return out;
-}
-
-/**
- * Draws `img` into `rect` (canvas pixels) with a cover fit, then applies
- * the crop's zoom and pan. The image is clipped to the rect by the caller
- * when the panel is a custom shape; here it simply fills the rectangle.
- */
-export function drawPhotoInRect(ctx, img, rect, crop) {
+// Draws an image cover-fit into a rect: scaled so it always covers the
+// rect, then offset by the pan (px, py in 0..1) and the zoom (>= 1). The
+// caller clips to the panel first; this never draws outside the rect.
+function drawPhotoCover(ctx, img, x, y, w, h, zoom, px, py) {
   if (!img) return;
-  const { x, y, w, h } = rect;
-  const base = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-  const scale = base * (crop?.zoom ?? 1);
-  const pw = img.naturalWidth * scale;
-  const ph = img.naturalHeight * scale;
-  // Pan is capped at a quarter of the overhang either way, so panning can
-  // never expose an empty edge — the photo always covers the panel.
-  const maxOx = (pw - w) * 0.25;
-  const maxOy = (ph - h) * 0.25;
-  const cx = x + w / 2 + Math.max(-maxOx, Math.min(maxOx, (crop?.ox ?? 0) * maxOx));
-  const cy = y + h / 2 + Math.max(-maxOy, Math.min(maxOy, (crop?.oy ?? 0) * maxOy));
-  ctx.drawImage(img, cx - pw / 2, cy - ph / 2, pw, ph);
-}
-
-/** Draws `img` into a panel that may be slanted: clips to the panel's
- * shape (parallelogram for slanted panels, rectangle otherwise) so the
- * photo can never bleed into a neighbouring panel, then paints the
- * photo across the panel's bounding box. */
-export function drawPhotoInPanel(ctx, img, panel, rect, crop) {
-  ctx.save();
-  ctx.beginPath();
-  if (panel.slant) {
-    const s = panel.slant * rect.w;
-    ctx.moveTo(rect.x + s, rect.y);
-    ctx.lineTo(rect.x + rect.w, rect.y);
-    ctx.lineTo(rect.x + rect.w - s, rect.y + rect.h);
-    ctx.lineTo(rect.x, rect.y + rect.h);
-  } else {
-    ctx.rect(rect.x, rect.y, rect.w, rect.h);
-  }
-  ctx.closePath();
-  ctx.clip();
-  drawPhotoInRect(ctx, img, rect, crop);
-  ctx.restore();
+  const z = Math.max(1, zoom || 1);
+  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight) * z;
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  const fx = Math.min(1, Math.max(0, px == null ? 0.5 : px));
+  const fy = Math.min(1, Math.max(0, py == null ? 0.5 : py));
+  const dx = x + (w - dw) * fx;
+  const dy = y + (h - dh) * fy;
+  ctx.drawImage(img, dx, dy, dw, dh);
 }

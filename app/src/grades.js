@@ -1,197 +1,105 @@
-// Eight colour grades for Solmar Bay Cover Studio (v2).
-// A grade is data, not magic: warm/cool tint gradients painted over the
-// photo area, a vignette strength and a grain amount, plus `band` (kept
-// for the v1 title-band gradient) and `strip` — the thin bottom strip's
-// own gradient in v2, since the flat title band is gone. applyGrade paints
-// them onto a finished cover canvas. Every grade is deterministic (the
-// grain uses a seeded pattern), so the same cover exports byte-identical
-// PNGs every time.
+// Colour grades: each grade drives the title bands, the tagline, the
+// bottom strip, the photo tint and the scrim. The title is filled with
+// horizontal sunset bands (see lettering.js) — the band colours below are
+// what makes each grade read as its own poster at a glance.
+'use strict';
 
-export const GRADES = {
+const GRADES = {
   sunset: {
-    name: 'Sunset',
-    swatch: '#ff7a3c',
-    tint: [
-      { stop: 0, color: 'rgba(255, 190, 90, 0.10)' },
-      { stop: 0.6, color: 'rgba(255, 110, 60, 0.16)' },
-      { stop: 1, color: 'rgba(214, 40, 120, 0.28)' },
-    ],
-    band: ['#ff9e2c', '#ff5e62', '#c026d3'],
-    strip: ['#1a051f', '#4a0e4e', '#ff2ea6'],
-    vignette: 0.32,
-    grain: 0.05,
-    halftone: false,
+    label: 'Sunset',
+    swatch: 'linear-gradient(135deg,#ffd166,#ff5e62 55%,#b537f2)',
+    bands: ['#fff7d6', '#ffd166', '#ff9a3d', '#ff5e62', '#c44dff'],
+    offset: '#3b0a54',
+    tagline: '#ff7ad9',
+    strip: ['#2a0f38', '#7a1e4d'],
+    tint: 'rgba(255,110,40,0.10)',
+    scrim: 'rgba(12,4,24,0.62)',
+    accent: '#ffd166',
   },
   'neon-vice': {
-    name: 'Neon Vice',
-    swatch: '#ff2ea6',
-    tint: [
-      { stop: 0, color: 'rgba(0, 229, 255, 0.10)' },
-      { stop: 0.55, color: 'rgba(255, 46, 166, 0.14)' },
-      { stop: 1, color: 'rgba(90, 20, 160, 0.30)' },
-    ],
-    band: ['#12002e', '#7b2ff7', '#ff2ea6'],
-    strip: ['#05010f', '#2a0a5e', '#ff2ea6'],
-    vignette: 0.4,
-    grain: 0.06,
-    halftone: false,
+    label: 'Neon Vice',
+    swatch: 'linear-gradient(135deg,#7df9ff,#ff7ad9 55%,#3d0a5e)',
+    bands: ['#e8fbff', '#7df9ff', '#ff7ad9', '#b537f2', '#3d0a5e'],
+    offset: '#12022e',
+    tagline: '#7df9ff',
+    strip: ['#0a1030', '#4d0a5e'],
+    tint: 'rgba(120,60,255,0.12)',
+    scrim: 'rgba(6,2,26,0.62)',
+    accent: '#7df9ff',
   },
   'coral-heat': {
-    name: 'Coral Heat',
-    swatch: '#ff6b6b',
-    tint: [
-      { stop: 0, color: 'rgba(255, 220, 130, 0.12)' },
-      { stop: 0.5, color: 'rgba(255, 107, 107, 0.18)' },
-      { stop: 1, color: 'rgba(160, 30, 90, 0.26)' },
-    ],
-    band: ['#ffb347', '#ff6b6b', '#8e2a5c'],
-    strip: ['#20060f', '#5c1030', '#ff6b6b'],
-    vignette: 0.3,
-    grain: 0.04,
-    halftone: false,
-  },
-  'palm-dusk': {
-    name: 'Palm Dusk',
-    swatch: '#7c5cff',
-    tint: [
-      { stop: 0, color: 'rgba(255, 170, 120, 0.08)' },
-      { stop: 0.6, color: 'rgba(124, 92, 255, 0.16)' },
-      { stop: 1, color: 'rgba(20, 10, 60, 0.34)' },
-    ],
-    band: ['#f97316', '#7c3aed', '#1e1b4b'],
-    strip: ['#0d061f', '#2e1a5e', '#7c5cff'],
-    vignette: 0.38,
-    grain: 0.05,
-    halftone: false,
-  },
-  midnight: {
-    name: 'Midnight',
-    swatch: '#1e3a8a',
-    tint: [
-      { stop: 0, color: 'rgba(60, 120, 255, 0.10)' },
-      { stop: 1, color: 'rgba(4, 8, 40, 0.42)' },
-    ],
-    band: ['#0b1026', '#1e3a8a', '#0ea5e9'],
-    strip: ['#020617', '#0f2a5e', '#0ea5e9'],
-    vignette: 0.45,
-    grain: 0.07,
-    halftone: false,
-  },
-  'golden-hour': {
-    name: 'Golden Hour',
-    swatch: '#fbbf24',
-    tint: [
-      { stop: 0, color: 'rgba(255, 230, 150, 0.18)' },
-      { stop: 0.6, color: 'rgba(255, 170, 40, 0.16)' },
-      { stop: 1, color: 'rgba(180, 90, 20, 0.20)' },
-    ],
-    band: ['#fde68a', '#f59e0b', '#b45309'],
-    strip: ['#1f0d02', '#5e2f08', '#f59e0b'],
-    vignette: 0.26,
-    grain: 0.03,
-    halftone: false,
+    label: 'Coral Heat',
+    swatch: 'linear-gradient(135deg,#fff3c4,#ff7e5f 55%,#e94f8a)',
+    bands: ['#fff3c4', '#ffb347', '#ff7e5f', '#e94f8a', '#7a1fa2'],
+    offset: '#4d0a2e',
+    tagline: '#ffe27a',
+    strip: ['#3d0f22', '#8a2a4d'],
+    tint: 'rgba(255,90,90,0.10)',
+    scrim: 'rgba(20,4,14,0.60)',
+    accent: '#ffb347',
   },
   halftone: {
-    name: 'Halftone',
-    swatch: '#111111',
-    tint: [
-      { stop: 0, color: 'rgba(255, 255, 255, 0.06)' },
-      { stop: 1, color: 'rgba(0, 0, 0, 0.22)' },
-    ],
-    band: ['#facc15', '#f97316', '#111111'],
-    strip: ['#0a0a0a', '#3d2c05', '#facc15'],
-    vignette: 0.3,
-    grain: 0.02,
-    halftone: true,
+    label: 'Halftone',
+    swatch: 'linear-gradient(135deg,#f5f5f5,#9a9a9a 55%,#111111)',
+    bands: ['#ffffff', '#e2e2e2', '#b5b5b5', '#5f5f5f', '#161616'],
+    offset: '#000000',
+    tagline: '#ffd166',
+    strip: ['#141414', '#3a3a3a'],
+    tint: 'rgba(0,0,0,0.14)',
+    scrim: 'rgba(0,0,0,0.62)',
+    accent: '#ffd166',
   },
-  noir: {
-    name: 'Noir',
-    swatch: '#444444',
-    tint: [
-      { stop: 0, color: 'rgba(255, 255, 255, 0.05)' },
-      { stop: 1, color: 'rgba(0, 0, 0, 0.48)' },
-    ],
-    band: ['#525252', '#171717', '#000000'],
-    strip: ['#000000', '#1f1f1f', '#525252'],
-    vignette: 0.5,
-    grain: 0.09,
-    halftone: false,
+  'palm-gold': {
+    label: 'Palm Gold',
+    swatch: 'linear-gradient(135deg,#fffbe6,#f5b942 55%,#7a3b12)',
+    bands: ['#fffbe6', '#ffe27a', '#f5b942', '#d97b29', '#7a3b12'],
+    offset: '#3a1c05',
+    tagline: '#ff9a3d',
+    strip: ['#2e1a05', '#6b3d10'],
+    tint: 'rgba(255,170,40,0.12)',
+    scrim: 'rgba(16,8,2,0.60)',
+    accent: '#ffe27a',
+  },
+  midnight: {
+    label: 'Midnight',
+    swatch: 'linear-gradient(135deg,#dfe9ff,#5b6cff 55%,#2b1055)',
+    bands: ['#dfe9ff', '#8fb8ff', '#5b6cff', '#9d4edd', '#2b1055'],
+    offset: '#0b0626',
+    tagline: '#c9b8ff',
+    strip: ['#0a0a2e', '#2b1055'],
+    tint: 'rgba(60,80,255,0.12)',
+    scrim: 'rgba(4,2,22,0.62)',
+    accent: '#8fb8ff',
+  },
+  candy: {
+    label: 'Candy',
+    swatch: 'linear-gradient(135deg,#ffd6ec,#ff4d6d 55%,#7b2d8b)',
+    bands: ['#ffffff', '#ffd6ec', '#ff8ac2', '#ff4d6d', '#7b2d8b'],
+    offset: '#3d0a33',
+    tagline: '#7df9ff',
+    strip: ['#33102e', '#7b1e5e'],
+    tint: 'rgba(255,80,150,0.10)',
+    scrim: 'rgba(18,2,16,0.60)',
+    accent: '#ff8ac2',
+  },
+  chrome: {
+    label: 'Chrome',
+    swatch: 'linear-gradient(135deg,#ffffff,#9aa8b8 55%,#2e3a4a)',
+    bands: ['#ffffff', '#dfe6ee', '#9aa8b8', '#5f7086', '#2e3a4a'],
+    offset: '#101820',
+    tagline: '#ffd166',
+    strip: ['#101820', '#33404f'],
+    tint: 'rgba(120,150,180,0.10)',
+    scrim: 'rgba(4,8,12,0.62)',
+    accent: '#dfe6ee',
   },
 };
 
-export const GRADE_IDS = Object.keys(GRADES);
-
-/** Returns the grade record for an id, falling back to Sunset. */
-export function gradeFor(gradeId) {
-  return GRADES[gradeId] || GRADES.sunset;
-}
-
-/** Paints a grade's tint, vignette and grain over the photo area of a canvas. */
-export function applyGrade(ctx, w, h, photoH, gradeId) {
-  const grade = gradeFor(gradeId);
-  const tint = ctx.createLinearGradient(0, 0, 0, photoH);
-  for (const s of grade.tint) tint.addColorStop(s.stop, s.color);
-  ctx.fillStyle = tint;
-  ctx.fillRect(0, 0, w, photoH);
-  // Vignette: darkened corners over the whole cover.
-  const v = ctx.createRadialGradient(
-    w / 2, h / 2, Math.min(w, h) * 0.35,
-    w / 2, h / 2, Math.max(w, h) * 0.75,
-  );
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, `rgba(0,0,0,${grade.vignette})`);
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, w, h);
-  // Grain: deterministic dots from a tiny seeded generator, so exports repeat.
-  if (grade.grain > 0) {
-    let seed = 1234567;
-    const rand = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    const step = Math.max(3, Math.round(w / 320));
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    const count = Math.floor((w * h * grade.grain) / (step * step * 14));
-    for (let i = 0; i < count; i++) {
-      const x = rand() * w;
-      const y = rand() * h;
-      ctx.globalAlpha = grade.grain * (0.4 + rand() * 0.6);
-      ctx.fillRect(x, y, 1.4, 1.4);
-    }
-    ctx.globalAlpha = 1;
-  }
-  // Halftone: a dot screen over the photo area.
-  if (grade.halftone) {
-    const gap = Math.max(7, Math.round(w / 160));
-    ctx.fillStyle = 'rgba(0,0,0,0.16)';
-    for (let y = gap / 2; y < photoH; y += gap) {
-      for (let x = gap / 2; x < w; x += gap) {
-        const r = 1 + ((x + y) % gap) / gap * 1.6;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
-}
-
-/** Vertical gradient for the title band of a grade. */
-export function gradeBandGradient(ctx, x, y, w, h, gradeId) {
-  const grade = gradeFor(gradeId);
-  const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, grade.band[0]);
-  g.addColorStop(0.55, grade.band[1]);
-  g.addColorStop(1, grade.band[2]);
-  return g;
-}
-
-/** Horizontal gradient for the thin bottom strip of a grade (v2). */
-export function gradeStripGradient(ctx, x, y, w, h, gradeId) {
-  const grade = gradeFor(gradeId);
-  const stops = grade.strip || grade.band;
-  const g = ctx.createLinearGradient(x, y, x + w, y);
-  g.addColorStop(0, stops[0]);
-  g.addColorStop(0.55, stops[1]);
-  g.addColorStop(1, stops[2]);
-  return g;
+// The bottom strip's gradient for a grade, as a canvas gradient.
+function gradeStripGradient(ctx, grade, w, h) {
+  const g = GRADES[grade] || GRADES.sunset;
+  const grad = ctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, g.strip[0]);
+  grad.addColorStop(1, g.strip[1]);
+  return grad;
 }
